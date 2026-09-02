@@ -9,6 +9,7 @@ import {
   addMaskCategoryButton,
   applyOperationInPlace,
   applyQuickGeometricTransform,
+  clickPanelToSelect,
   createMaskLayer,
   createTemporaryExportDirectory,
   exportSelectedMaskAndDecodeIndexPng,
@@ -23,7 +24,9 @@ import {
   MAX_MASK_CATEGORIES,
   openMasksOptions,
   openOperation,
+  readPixelValueAt,
   selectPanel,
+  viewportMaskOverlay,
 } from "./support/page-objects";
 
 // CT-302: mask layers annotate a stack's spatial grid. This spec drives the
@@ -117,4 +120,41 @@ test("rotates the panel's masks with an in-place apply that rotates the stack", 
   const exportPath = join(await createTemporaryExportDirectory(), "rotated-mask.zip");
   const decoded = await exportSelectedMaskAndDecodeIndexPng(page, exportPath);
   expect(decoded.values).toEqual(EXPECTED_ROTATED_MASK_VALUES);
+});
+
+const SECOND_PANEL = 2;
+const IMAGE_DIMENSIONS = { width: multiBandTiff.width, height: multiBandTiff.height };
+
+// CT-331: the overlay/brush only fire on the SELECTED panel, so two panels each
+// carrying an imported layer show the overlay on whichever one is selected and
+// never both at once, and the underlying pixel data never moves.
+test("shows the mask overlay only on the selected panel", async () => {
+  const page = launched.window;
+
+  await loadFixtureAsStack(page, multiBandTiff.fileName);
+
+  await openMasksOptions(page);
+  await clickPanelToSelect(page, PANEL);
+  await importMaskFromPath(page, fixturePath(maskMultibandPng.fileName));
+  await expect(maskLayerOptions(page)).toHaveCount(1);
+
+  await clickPanelToSelect(page, SECOND_PANEL);
+  await importMaskFromPath(page, fixturePath(maskMultibandPng.fileName));
+  await expect(maskLayerOptions(page)).toHaveCount(1);
+
+  const panel1ReadoutBefore = await readPixelValueAt(page, PANEL, 0, 0, IMAGE_DIMENSIONS);
+  const panel2ReadoutBefore = await readPixelValueAt(page, SECOND_PANEL, 0, 0, IMAGE_DIMENSIONS);
+
+  await clickPanelToSelect(page, PANEL);
+  await expect(viewportMaskOverlay(page, PANEL)).toBeVisible();
+  await expect(viewportMaskOverlay(page, SECOND_PANEL)).toHaveCount(0);
+
+  await clickPanelToSelect(page, SECOND_PANEL);
+  await expect(viewportMaskOverlay(page, SECOND_PANEL)).toBeVisible();
+  await expect(viewportMaskOverlay(page, PANEL)).toHaveCount(0);
+
+  const panel1ReadoutAfter = await readPixelValueAt(page, PANEL, 0, 0, IMAGE_DIMENSIONS);
+  const panel2ReadoutAfter = await readPixelValueAt(page, SECOND_PANEL, 0, 0, IMAGE_DIMENSIONS);
+  expect(panel1ReadoutAfter.value).toBe(panel1ReadoutBefore.value);
+  expect(panel2ReadoutAfter.value).toBe(panel2ReadoutBefore.value);
 });

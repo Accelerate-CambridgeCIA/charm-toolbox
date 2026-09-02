@@ -374,6 +374,7 @@ function useViewportCellInteractionSettings(
     handleRegionToolPlainClick,
     handlePinPixelSpectrum,
     maskPainting: buildMaskPaintingOrNull({
+      isSelected,
       isMasksToolActive: masksTool.isMasksToolActive,
       layer: findSelectedMaskLayerOrNull(renderingState.masks),
       brush: masksTool.brush,
@@ -385,8 +386,10 @@ function useViewportCellInteractionSettings(
 
 // CT-304: painting exists only while the Masks tool is on, a layer is selected,
 // and that layer still covers the panel's stack - the same three conditions that
-// make the overlay meaningful.
-interface MaskPaintingInputs {
+// make the overlay meaningful. CT-331: it also requires the panel to be SELECTED,
+// so opening the Masks tool does not tint every panel that carries a layer.
+export interface MaskPaintingInputs {
+  readonly isSelected: boolean;
   readonly isMasksToolActive: boolean;
   readonly layer: MaskLayer | null;
   readonly brush: MaskBrushSettings;
@@ -394,8 +397,10 @@ interface MaskPaintingInputs {
   readonly onCommitStrokeValues: (values: Uint8Array) => void;
 }
 
-function buildMaskPaintingOrNull(inputs: MaskPaintingInputs): ViewportMaskPainting | null {
-  if (!inputs.isMasksToolActive || !inputs.layer || !inputs.content) return null;
+export function buildMaskPaintingOrNull(inputs: MaskPaintingInputs): ViewportMaskPainting | null {
+  if (!inputs.isSelected || !inputs.isMasksToolActive || !inputs.layer || !inputs.content) {
+    return null;
+  }
   const dimensions = getImageSourceDimensions(inputs.content.source);
   if (!doesMaskLayerCoverDimensions(inputs.layer, dimensions.width, dimensions.height)) return null;
   return {

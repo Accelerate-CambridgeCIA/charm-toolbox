@@ -7,6 +7,7 @@ export {
   panelGrid,
   panelCell,
   panelCanvas,
+  viewportMaskOverlay,
   selectPanel,
   countSelectedPanels,
   countPanels,
