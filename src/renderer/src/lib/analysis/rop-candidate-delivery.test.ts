@@ -108,7 +108,7 @@ const NOOP_HANDLE = { id: "test", update: () => undefined, clear: () => undefine
 
 const REQUEST = {
   seed: 7,
-  values: Float32Array.from([3, 4]),
+  bands: [Float32Array.from([3, 4])],
   width: 2,
   height: 1,
   score: null,
@@ -151,7 +151,7 @@ describe("deliverRopCandidateToPanel", () => {
     expect(placed?.kind === "raster" && placed.raster).toBe(live?.raster);
     expect(live?.raster).toMatchObject({ width: 2, height: 1, bandCount: 1, sampleFormat: "float" });
     expect(Array.from(live?.raster.bandPixels[0] ?? [])).toEqual([3, 4]);
-    expect(live?.raster.bandPixels[0]?.buffer).not.toBe(REQUEST.values.buffer);
+    expect(live?.raster.bandPixels[0]?.buffer).not.toBe(REQUEST.bands[0]?.buffer);
     expect(toast.success).toHaveBeenCalledWith("Projection ready", expect.anything());
   });
 

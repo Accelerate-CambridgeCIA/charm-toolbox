@@ -1,8 +1,12 @@
-import { formatRopKeptHistoryLabel } from "@/lib/analysis/rop-format";
+import {
+  formatRopKeptHistoryLabel,
+  formatRopProjectionBandLabel,
+} from "@/lib/analysis/rop-format";
 import { makeFloat32RasterFromBands } from "@/lib/image/make-float-raster";
 import type { RasterImage } from "@/lib/image/raster-image";
 
 import { ROP_PANEL_ICON } from "./operation-command-bindings";
+import type { ParameterValuesById } from "./parameter-schema";
 import type { RegisteredViewportAction } from "./registered-actions";
 
 // CT-309: committing a kept ROP candidate as a new stack. Like the Subset
@@ -23,7 +27,9 @@ export const ROP_CANDIDATE_READY_SUCCESS_MESSAGE = "Projection ready";
 
 export interface RopKeepRequest {
   readonly seed: number;
-  readonly values: Float32Array;
+  // CT-337: the projections this stack carries - one band per press with the
+  // default count, and the whole batch when a press drew several.
+  readonly bands: ReadonlyArray<Float32Array>;
   readonly width: number;
   readonly height: number;
   readonly score: number | null;
@@ -31,6 +37,19 @@ export interface RopKeepRequest {
   // CT-310: set when the candidate won a SEARCH of that many projections; the
   // History entry then names the search instead of a seed (see rop-format.ts).
   readonly searchedProjectionCount?: number | null;
+  // CT-337: how many projections the press drew, and which one of them this
+  // stack holds when only the best band was kept.
+  readonly projectionCount?: number | null;
+  readonly projectionIndex?: number | null;
+}
+
+// CT-337: the memory preflight prices the delivery by the number of bands it
+// places, which no schema carries, so the delivery states it as a parameter
+// value the action itself ignores (see estimate-apply-allocation.ts).
+export const ROP_PROJECTION_BAND_COUNT_PARAMETER_ID = "ropProjectionBandCount";
+
+export function buildRopDeliveryParameterValues(request: RopKeepRequest): ParameterValuesById {
+  return { [ROP_PROJECTION_BAND_COUNT_PARAMETER_ID]: request.bands.length };
 }
 
 export function buildRopKeepAction(request: RopKeepRequest): RegisteredViewportAction {
@@ -83,7 +102,19 @@ function buildRopStackAction(
 // candidate (it may still be the best-so-far), and a shared buffer would let a
 // later buffer-release of the panel detach the aside's retained copy too.
 function buildProjectionRasterCopy(request: RopKeepRequest): RasterImage {
-  return makeFloat32RasterFromBands({ width: request.width, height: request.height }, [
-    request.values.slice(),
-  ]);
+  return makeFloat32RasterFromBands(
+    { width: request.width, height: request.height, ...describeProjectionBandLabels(request) },
+    request.bands.map((band) => band.slice()),
+  );
+}
+
+// A single delivered band keeps the plain band naming a one-projection press
+// has always had; a batch names each band by the projection it holds.
+function describeProjectionBandLabels(
+  request: RopKeepRequest,
+): { bandLabels?: ReadonlyArray<string> } {
+  if (request.bands.length < 2) return {};
+  return {
+    bandLabels: request.bands.map((_band, index) => formatRopProjectionBandLabel(index + 1)),
+  };
 }

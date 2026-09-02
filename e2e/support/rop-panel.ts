@@ -137,6 +137,46 @@ export async function pressNewProjectionUntilProjectionReady(
   });
 }
 
+// CT-337: one press can draw several projections into ONE candidate stack. The
+// count field sits above the button, the seed readout names the batch size, and
+// the per-band scores are the CT-319 Top bands rows under the objective's name.
+
+export function ropProjectionsPerPressField(page: Page): Locator {
+  return ropOptionsPanel(page).getByRole("spinbutton", { name: "Projections per press" });
+}
+
+export async function setRopProjectionsPerPress(page: Page, projectionCount: number): Promise<void> {
+  await runAsStoryboardStep(page, `Draw ${projectionCount} projections per press`, async () => {
+    await ropProjectionsPerPressField(page).fill(String(projectionCount));
+  });
+}
+
+export async function pressNewProjectionUntilBatchReady(
+  page: Page,
+  expectedSeed: number,
+  projectionCount: number,
+): Promise<void> {
+  const stepName = `Press New projection for ${projectionCount} projections (seed ${expectedSeed})`;
+  await runAsStoryboardStep(page, stepName, async () => {
+    await ropNewProjectionButton(page).click();
+    await expect(page.getByText(ROP_PROJECTION_READY_TEXT).last()).toBeVisible({
+      timeout: ROP_RUN_TIMEOUT_MS,
+    });
+    await expect(ropSeedReadout(page)).toHaveText(
+      `Seed ${expectedSeed}, ${projectionCount} projections`,
+    );
+    await expect(ropNewProjectionButton(page)).toBeEnabled({ timeout: ROP_RUN_TIMEOUT_MS });
+  });
+}
+
+export function ropPerBandScoreRows(page: Page, scoreName: string): Locator {
+  return ropOptionsPanel(page).locator(`output[aria-label^="${scoreName} top band "]`);
+}
+
+export function ropPerBandScoreRowForBand(page: Page, scoreName: string, bandLabel: string): Locator {
+  return ropPerBandScoreRows(page, scoreName).filter({ hasText: bandLabel });
+}
+
 const ROP_RUN_TIMEOUT_MS = 60_000;
 
 // CT-310: the search section. "Search" runs every candidate inside ONE Python
@@ -144,7 +184,7 @@ const ROP_RUN_TIMEOUT_MS = 60_000;
 // kept-projection toast, not a readout.
 
 export function ropProjectionCountField(page: Page): Locator {
-  return ropOptionsPanel(page).getByRole("spinbutton", { name: "Projections" });
+  return ropOptionsPanel(page).getByRole("spinbutton", { name: "Projections", exact: true });
 }
 
 export function ropSearchButton(page: Page): Locator {

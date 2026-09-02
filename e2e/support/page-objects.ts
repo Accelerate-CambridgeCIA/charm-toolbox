@@ -543,6 +543,7 @@ export {
 export {
   chooseRopObjective,
   importRopObjectiveScript,
+  pressNewProjectionUntilBatchReady,
   pressNewProjectionUntilProjectionReady,
   pressNewProjectionUntilScoreShows,
   pressNewProjectionUntilSeedShows,
@@ -554,8 +555,11 @@ export {
   ropNewProjectionButton,
   ropObjectivePicker,
   ropOptionsPanel,
+  ropPerBandScoreRowForBand,
+  ropPerBandScoreRows,
   ropPinnedPanelReadout,
   ropProjectionCountField,
+  ropProjectionsPerPressField,
   ropScoreReadout,
   ropSearchButton,
   ropSeedReadout,
@@ -567,6 +571,7 @@ export {
   ROP_PROJECTION_READY_TEXT,
   setForcedRopSeed,
   setRopProjectionCount,
+  setRopProjectionsPerPress,
   startRopProjectionSearch,
   useTheSelectedPanelAsRopSource,
 } from "./rop-panel";

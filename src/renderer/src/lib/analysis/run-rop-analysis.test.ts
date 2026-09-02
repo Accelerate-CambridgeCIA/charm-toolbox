@@ -84,6 +84,26 @@ function buildRecordedSessionRuns(): RecordedSessionRuns {
   };
 }
 
+// CT-337: a batch press asks for N projections and the worker answers with an
+// N-band cube in one execute.
+function buildBatchServingApi(
+  bands: ReadonlyArray<ReadonlyArray<number>>,
+  recorded: RecordedSessionRuns,
+): UserScriptRunChunkedApi {
+  const bytes = new Uint8Array(Float32Array.from(bands.flat()).buffer.slice(0));
+  const api = buildCubeServingApi([], recorded);
+  api.executeUserScriptRun = (request) => {
+    recorded.executeParams.push(request.params);
+    return Promise.resolve({
+      status: "completed-cube",
+      shape: [bands.length, 1, bands[0]?.length ?? 0] as [number, number, number],
+      totalBytes: bytes.byteLength,
+    });
+  };
+  api.readUserScriptRunResultChunk = () => Promise.resolve({ done: true, bytes: bytes.slice() });
+  return api;
+}
+
 function rollBindings() {
   return { busyRegistrar: buildSilentBusyRegistrar(), viewportIndex: 0 };
 }
@@ -96,11 +116,11 @@ describe("createRopProjectionSessionHolder", () => {
       [],
       buildCubeServingApi([10, 20], recorded),
     );
-    const first = await holder.executeProjectionShowingPanelBusy(11, rollBindings());
+    const first = await holder.executeProjectionShowingPanelBusy(11, 1, rollBindings());
     const uploadedChunksAfterFirstPress = recorded.cubeChunkCount;
-    const second = await holder.executeProjectionShowingPanelBusy(22, rollBindings());
+    const second = await holder.executeProjectionShowingPanelBusy(22, 1, rollBindings());
 
-    expect(first).toEqual({ status: "rolled", values: Float32Array.from([10, 20]) });
+    expect(first).toEqual({ status: "rolled", bands: [Float32Array.from([10, 20])] });
     expect(second.status).toBe("rolled");
     expect(recorded.beginRequests).toHaveLength(1);
     expect(recorded.beginRequests[0]?.source).toEqual({ mode: "builtin", scriptName: "rop" });
@@ -112,6 +132,25 @@ describe("createRopProjectionSessionHolder", () => {
     expect(recorded.releasedCount).toBe(0);
   });
 
+  it("draws several projections in one execute and returns every band (CT-337)", async () => {
+    const recorded = buildRecordedSessionRuns();
+    const holder = createRopProjectionSessionHolder(
+      buildTwoPixelStack(),
+      [],
+      buildBatchServingApi([[10, 20], [30, 40], [50, 60]], recorded),
+    );
+    const outcome = await holder.executeProjectionShowingPanelBusy(11, 3, rollBindings());
+
+    expect(recorded.executeParams).toEqual([{ seed: 11, count: 3 }]);
+    expect(outcome.status).toBe("rolled");
+    if (outcome.status !== "rolled") return;
+    expect(outcome.bands.map((band) => Array.from(band))).toEqual([
+      [10, 20],
+      [30, 40],
+      [50, 60],
+    ]);
+  });
+
   it("releases the retained session exactly once", async () => {
     const recorded = buildRecordedSessionRuns();
     const holder = createRopProjectionSessionHolder(
@@ -119,7 +158,7 @@ describe("createRopProjectionSessionHolder", () => {
       [],
       buildCubeServingApi([10, 20], recorded),
     );
-    await holder.executeProjectionShowingPanelBusy(11, rollBindings());
+    await holder.executeProjectionShowingPanelBusy(11, 1, rollBindings());
     await holder.release();
     await holder.release();
     expect(recorded.releasedCount).toBe(1);
@@ -131,7 +170,7 @@ describe("createRopProjectionSessionHolder", () => {
     api.executeUserScriptRun = () =>
       Promise.resolve({ status: "failed", message: "boom" });
     const holder = createRopProjectionSessionHolder(buildTwoPixelStack(), [], api);
-    const outcome = await holder.executeProjectionShowingPanelBusy(11, rollBindings());
+    const outcome = await holder.executeProjectionShowingPanelBusy(11, 1, rollBindings());
     expect(outcome).toEqual({ status: "failed", message: "boom" });
   });
 
@@ -140,7 +179,7 @@ describe("createRopProjectionSessionHolder", () => {
     const api = buildCubeServingApi([10, 20], recorded);
     api.executeUserScriptRun = () => Promise.resolve({ status: "completed", value: 3 });
     const holder = createRopProjectionSessionHolder(buildTwoPixelStack(), [], api);
-    const outcome = await holder.executeProjectionShowingPanelBusy(11, rollBindings());
+    const outcome = await holder.executeProjectionShowingPanelBusy(11, 1, rollBindings());
     expect(outcome.status).toBe("failed");
   });
 });
@@ -170,7 +209,7 @@ describe("createRopProjectionSessionHolder search", () => {
       masks,
       buildCubeServingApi([7, 9], recorded),
     );
-    await holder.executeProjectionShowingPanelBusy(11, rollBindings());
+    await holder.executeProjectionShowingPanelBusy(11, 1, rollBindings());
     const uploadsAfterPress = recorded.cubeChunkCount;
     const outcome = await holder.searchBestProjectionShowingPanelBusy(buildSearchRequest(), rollBindings());
 

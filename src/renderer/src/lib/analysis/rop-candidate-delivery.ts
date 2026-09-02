@@ -7,6 +7,7 @@ import {
 } from "@/lib/actions/apply-action-flow";
 import {
   buildRopCandidateDeliveryAction,
+  buildRopDeliveryParameterValues,
   buildRopFrozenStackDeliveryAction,
   type RopCandidateDeliveryAction,
   type RopKeepRequest,
@@ -118,7 +119,8 @@ export async function deliverRopCandidateToPanel(
   const sourceContent = bindings.imagesByIndex.get(sourceIndex);
   if (!sourceContent) return null;
   const delivery = buildRopStackDeliveryForTone(request, tone);
-  if (reportApplyExceedsMemoryBudget(delivery.action, sourceContent.source, NO_PARAMETER_VALUES, sourceIndex, bindings)) {
+  const preflightValues = buildRopDeliveryParameterValues(request);
+  if (reportApplyExceedsMemoryBudget(delivery.action, sourceContent.source, preflightValues, sourceIndex, bindings)) {
     return null;
   }
   const targetIndex = replaceAtIndex ?? findOrOpenFreshResultPanelIndexOrNull(bindings);

@@ -27,6 +27,7 @@ import {
   panelCanvas,
   panelCell,
   panelGrid,
+  pressNewProjectionUntilBatchReady,
   pressNewProjectionUntilProjectionReady,
   pressNewProjectionUntilScoreShows,
   readHistoryEntries,
@@ -38,7 +39,10 @@ import {
   ropNewProjectionButton,
   ropObjectivePicker,
   ropOptionsPanel,
+  ropPerBandScoreRowForBand,
+  ropPerBandScoreRows,
   ropPinnedPanelReadout,
+  ropProjectionsPerPressField,
   ropScoreReadout,
   ropSeedReadout,
   ropSourcePanelReadout,
@@ -48,6 +52,7 @@ import {
   ROP_PRESS_REFUSED_TEXT,
   selectPanel,
   setForcedRopSeed,
+  setRopProjectionsPerPress,
   useTheSelectedPanelAsRopSource,
 } from "./support/page-objects";
 import { runAsStoryboardStep } from "./support/storyboard-step";
@@ -94,6 +99,11 @@ const REFERENCE_CNR_SCORE = builtinScriptReferences.ropCnr.value;
 const EXPECTED_SCORE_TEXT = REFERENCE_CNR_SCORE.toPrecision(4);
 const SOURCE_ORIGIN_VALUE = String(multiBandTiff.samplePixels[0]?.valuesPerBand[0]);
 const NEAR_BLACK_FRACTION_CEILING = 0.02;
+const PROJECTIONS_PER_PRESS = 3;
+const CNR_SCORE_NAME = "CNR";
+const FIRST_PROJECTION_BAND_LABEL = "Projection 1";
+const OVER_RANGE_PROJECTIONS_PER_PRESS = 21;
+const PROJECTIONS_PER_PRESS_HINT = "Enter a whole number from 1 to 20.";
 const RELATIVE_TOLERANCE = 1e-4;
 const LARGEST_GRID_LAYOUT = "2x3";
 const LARGEST_GRID_PANEL_COUNT = 6;
@@ -263,6 +273,26 @@ test("keeps one resident Python worker across three presses", async () => {
   await expectSpawnCountRoseByExactlyOne(page, spawnsBeforeAnyPress);
 });
 
+// CT-337: one press can draw a whole batch. The ORACLES are the candidate
+// panel's Metadata reporting three bands, band 1 of the batch still matching
+// the single-press reference (the first draw of a seed is the same draw
+// whatever the count), the per-band score list carrying one row per projection
+// with band 1 at the pinned CNR reference, and History naming the batch.
+test("draws several projections in one press and scores each of them", async () => {
+  const page = launched.window;
+
+  await importTheParchmentMask(page);
+  await openOperation(page, ROP_PANEL_LABEL);
+  await chooseRopObjective(page, "CNR");
+  await expectAnUnusableCountToBlockThePress(page);
+  await setRopProjectionsPerPress(page, PROJECTIONS_PER_PRESS);
+  await pressNewProjectionUntilBatchReady(page, FORCED_SEED, PROJECTIONS_PER_PRESS);
+
+  await expectEveryProjectionOfTheBatchToBeScored(page);
+  await closeRopOptions(page);
+  await expectCandidatePanelToHoldTheWholeBatch(page);
+});
+
 test("locks the mask objectives until a layer with two painted categories exists", async () => {
   const page = launched.window;
 
@@ -283,6 +313,48 @@ test("locks the mask objectives until a layer with two painted categories exists
   );
   await expect(ropOptionsPanel(page)).not.toContainText("painted pixels");
 });
+
+// A count the panel cannot use disables the press and the field says what a
+// usable one looks like.
+async function expectAnUnusableCountToBlockThePress(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "An out-of-range count blocks the press", async () => {
+    await setRopProjectionsPerPress(page, OVER_RANGE_PROJECTIONS_PER_PRESS);
+    await expect(ropNewProjectionButton(page)).toBeDisabled();
+    await ropProjectionsPerPressField(page).hover();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: PROJECTIONS_PER_PRESS_HINT }),
+    ).toBeVisible();
+  });
+}
+
+// The list is the CT-319 Top bands presentation, so it names each band by its
+// identity text ("#k Projection k") and carries that band's own score.
+async function expectEveryProjectionOfTheBatchToBeScored(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "Every projection of the batch has its own CNR score", async () => {
+    await expect(ropPerBandScoreRows(page, CNR_SCORE_NAME)).toHaveCount(PROJECTIONS_PER_PRESS);
+    await expect(
+      ropPerBandScoreRowForBand(page, CNR_SCORE_NAME, FIRST_PROJECTION_BAND_LABEL),
+    ).toContainText(EXPECTED_SCORE_TEXT);
+  });
+}
+
+// Band 1 of a batch IS the single press's projection (the same seed draws the
+// same first Q), so the pinned reference still applies to it.
+async function expectCandidatePanelToHoldTheWholeBatch(page: Page): Promise<void> {
+  await selectPanel(page, CANDIDATE_PANEL);
+  await runAsStoryboardStep(page, `Panel 2 is a ${PROJECTIONS_PER_PRESS}-band stack`, async () => {
+    expect((await readMetadata(page)).bandCount).toBe(String(PROJECTIONS_PER_PRESS));
+    const readout = await readPixelValueAt(page, CANDIDATE_PANEL, 0, 0, IMAGE);
+    expect(readout.bandLabel).toContain(FIRST_PROJECTION_BAND_LABEL);
+  });
+  await expectPanelMatchesTheReferenceProjection(page, CANDIDATE_PANEL);
+  await runAsStoryboardStep(page, "Panel 2's History names the whole batch", async () => {
+    await expectHistoryToRecordOperation(page, {
+      actionLabel: ROP_PANEL_LABEL,
+      detailSubstrings: [`ROP (seed ${FORCED_SEED}, ${PROJECTIONS_PER_PRESS} projections)`],
+    });
+  });
+}
 
 async function expectRopAsideToProjectFromPanel(page: Page, panelNumber: number): Promise<void> {
   await runAsStoryboardStep(page, `The ROP aside projects from panel ${panelNumber}`, async () => {

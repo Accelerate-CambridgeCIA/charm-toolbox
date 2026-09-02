@@ -50,7 +50,9 @@ const CUSTOM_OBJECTIVE_NEEDS_ONE_FINITE_NUMBER =
   "The objective script must return one finite number.";
 
 export type RopRollOutcome =
-  | { readonly status: "rolled"; readonly values: Float32Array }
+  // CT-337: a press can draw several projections in one execute, so a rolled
+  // outcome carries the whole batch (a default press is one band).
+  | { readonly status: "rolled"; readonly bands: ReadonlyArray<Float32Array> }
   | { readonly status: "stopped" }
   | { readonly status: "failed"; readonly message: string };
 
@@ -78,6 +80,7 @@ interface RopSessionState {
 export interface RopProjectionSessionHolder {
   executeProjectionShowingPanelBusy(
     seed: number,
+    projectionCount: number,
     bindings: UserScriptRunFlowBindings,
   ): Promise<RopRollOutcome>;
   searchBestProjectionShowingPanelBusy(
@@ -94,8 +97,8 @@ export function createRopProjectionSessionHolder(
 ): RopProjectionSessionHolder {
   const holder: RopSessionState = { session: null, raster, masks: maskCategoryBytes, api };
   return {
-    executeProjectionShowingPanelBusy: (seed, bindings) =>
-      rollProjectionShowingPanelBusy(holder, seed, bindings),
+    executeProjectionShowingPanelBusy: (seed, projectionCount, bindings) =>
+      rollProjectionShowingPanelBusy(holder, seed, projectionCount, bindings),
     searchBestProjectionShowingPanelBusy: (request, bindings) =>
       searchProjectionsShowingPanelBusy(holder, request, bindings),
     release: async () => {
@@ -108,11 +111,12 @@ export function createRopProjectionSessionHolder(
 async function rollProjectionShowingPanelBusy(
   holder: RopSessionState,
   seed: number,
+  projectionCount: number,
   bindings: UserScriptRunFlowBindings,
 ): Promise<RopRollOutcome> {
   const busy = registerRopRunBusyEntry(bindings);
   try {
-    return await rollProjectionUpdatingBusyEntry(holder, seed, bindings, busy);
+    return await rollProjectionUpdatingBusyEntry(holder, seed, projectionCount, bindings, busy);
   } catch (error) {
     return describeRopRollFailureOutcome(error);
   } finally {
@@ -147,13 +151,15 @@ function registerRopRunBusyEntry(bindings: UserScriptRunFlowBindings): BusyEntry
 async function rollProjectionUpdatingBusyEntry(
   holder: RopSessionState,
   seed: number,
+  projectionCount: number,
   bindings: UserScriptRunFlowBindings,
   busy: BusyEntryHandle,
 ): Promise<RopRollOutcome> {
   const callbacks = buildRunCallbacksForBusyEntry(bindings, busy);
   const session = await openRetainedRopSessionIfNeeded(holder, callbacks);
   if (session === null) return { status: "stopped" };
-  const result = await session.execute(buildRopExecuteParams(seed), callbacks);
+  const params = buildRopExecuteParams(seed, projectionCount);
+  const result = await session.execute(params, callbacks);
   return describeRopRollOutcome(result);
 }
 
@@ -208,8 +214,8 @@ async function openRetainedRopSessionIfNeeded(
 function describeRopRollOutcome(result: ToolboxRunUserScriptResult): RopRollOutcome {
   if (result.status === "canceled") return { status: "stopped" };
   if (result.status === "failed") return { status: "failed", message: result.message };
-  if (result.status === "completed-cube" && result.bands[0] !== undefined) {
-    return { status: "rolled", values: result.bands[0] };
+  if (result.status === "completed-cube" && result.bands.length > 0) {
+    return { status: "rolled", bands: result.bands };
   }
   return { status: "failed", message: ROP_RETURNED_NO_CANDIDATE };
 }
