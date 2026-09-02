@@ -57,8 +57,10 @@ export function maskCategoryColorField(page: Page, position: number): Locator {
   return masksOptionsPanel(page).getByLabel(`Category ${position} color`);
 }
 
+// CT-332: the name pattern has to exclude "Add category from file", the second
+// button beside this one; this button's accessible name ends in its N/5 count.
 export function addMaskCategoryButton(page: Page): Locator {
-  return masksOptionsPanel(page).getByRole("button", { name: /^Add category/ });
+  return masksOptionsPanel(page).getByRole("button", { name: /^Add category \d+\/\d+$/ });
 }
 
 // Radix puts the aria-label on the slider ROOT and role="slider" (with

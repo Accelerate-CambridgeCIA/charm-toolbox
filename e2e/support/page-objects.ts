@@ -492,6 +492,8 @@ export {
   setMaskBrushSizeToOnePixel,
 } from "./mask-brush";
 export {
+  addMaskCategoriesFromPaths,
+  addMaskCategoryFromFileButton,
   decodeIndexPngInsideMaskZip,
   decodeSingleChannelPngBuffer,
   exportMaskButton,

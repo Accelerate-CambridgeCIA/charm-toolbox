@@ -1,10 +1,17 @@
 import {
+  addCategoriesFromMaskFilesToLayer,
+  describeTooManyCategoryFilesOrNull,
+  MASK_CATEGORY_FROM_ZIP_MESSAGE,
+  type MaskCategoryFile,
+} from "@/lib/masks/mask-add-category-from-file";
+import {
   buildImportedMaskLayerContent,
   describeMaskDimensionMismatchOrNull,
   describeMaskFileDimensionMismatchOrNull,
+  remapMaskValuesToCategoryIndexes,
   type MaskGridSize,
 } from "@/lib/masks/mask-import";
-import type { MaskLayerContent } from "@/lib/masks/mask-layer";
+import type { MaskLayer, MaskLayerContent } from "@/lib/masks/mask-layer";
 import {
   combineMaskFilesIntoOneLayer,
   refuseMoreMaskFilesThanCategories,
@@ -29,11 +36,18 @@ import { readZipArchiveEntries } from "@/lib/masks/zip-store-reader";
 // - one zip: rebuilt losslessly from the toolbox's own pair inside it, or read
 //   as one category per PNG entry (mask-zip-import.ts);
 // - several PNGs: one category per file in pick order (mask-multi-file-import.ts).
+//
+// CT-332: the SAME picker also serves "Add category from file", which appends
+// the picked PNGs to the layer already selected instead of creating one.
 
 export interface MaskImportTarget {
   readonly width: number;
   readonly height: number;
 }
+
+export type MaskAddCategoriesResult =
+  | { readonly canceled: true }
+  | { readonly canceled: false; readonly layer: MaskLayer };
 
 export type MaskImportResult =
   | { readonly canceled: true }
@@ -158,4 +172,53 @@ function refuseMaskThatDoesNotCoverTheStack(
 ): void {
   const mismatch = describeMaskDimensionMismatchOrNull(decoded, target.width, target.height);
   if (mismatch !== null) throw new Error(mismatch);
+}
+
+// CT-332: the same picker, but every picked PNG becomes a CATEGORY of the
+// layer already selected instead of a new layer. A zip is refused here (the
+// Import mask button is where an archive belongs) and a pick wider than the
+// layer's free category slots is refused before any file is read.
+export async function addMaskCategoriesFromFilesThroughOpenDialog(
+  layer: MaskLayer,
+  api: MaskImportFlowApi = window.toolboxApi,
+): Promise<MaskAddCategoriesResult> {
+  const picked = await api.importMaskDialog();
+  if (picked.canceled) return { canceled: true };
+  const files = await readPickedFilesAsCategoryFiles(layer, picked.files, api);
+  return { canceled: false, layer: addCategoriesFromMaskFilesToLayer(layer, files) };
+}
+
+async function readPickedFilesAsCategoryFiles(
+  layer: MaskLayer,
+  picked: ReadonlyArray<PickedMaskFile>,
+  api: MaskImportFlowApi,
+): Promise<ReadonlyArray<MaskCategoryFile>> {
+  refusePicksThatCannotBecomeCategoriesOfTheLayer(layer, picked);
+  const decodedFiles = await Promise.all(
+    picked.map((file) => decodePickedFileAsMaskFile(api, file)),
+  );
+  const refuseMaskFile = buildStackCoverageGuard(layer);
+  decodedFiles.forEach((file) => refuseMaskFile(file.fileName, file.decoded));
+  return decodedFiles.map(describeDecodedFileAsCategoryFile);
+}
+
+function refusePicksThatCannotBecomeCategoriesOfTheLayer(
+  layer: MaskLayer,
+  picked: ReadonlyArray<PickedMaskFile>,
+): void {
+  if (picked.some((entry) => isZipFileName(entry.file.fileName))) {
+    throw new Error(MASK_CATEGORY_FROM_ZIP_MESSAGE);
+  }
+  const tooManyFiles = describeTooManyCategoryFilesOrNull(layer, picked.length);
+  if (tooManyFiles !== null) throw new Error(tooManyFiles);
+}
+
+// A file painting any non-zero value labels that pixel, whatever the value; the
+// remap keeps a multi-valued PNG within the category range so a file the app
+// cannot represent is still refused rather than silently collapsed.
+function describeDecodedFileAsCategoryFile(file: MaskFileToCombine): MaskCategoryFile {
+  return {
+    fileName: file.fileName,
+    values: remapMaskValuesToCategoryIndexes(file.decoded.values),
+  };
 }

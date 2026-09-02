@@ -17,6 +17,8 @@ import {
 import { closeToolboxApp, launchToolboxApp } from "./support/launch-app";
 import type { LaunchedApp } from "./support/launch-app";
 import {
+  addMaskCategoriesFromPaths,
+  addMaskCategoryFromFileButton,
   clickPanelToSelect,
   closeMasksOptions,
   computeNpcScores,
@@ -41,6 +43,7 @@ import {
   openMasksOptions,
   openOperation,
   panelCanvas,
+  readPixelValueAt,
   readZipEntriesByName,
   selectPanel,
 } from "./support/page-objects";
@@ -179,6 +182,123 @@ test("maps a 0/255 mask to a single category covering the top row", async () => 
 
   await expectNpcStaysLockedWithOneCategory(page);
 });
+
+// CT-332: "Add category from file" appends each picked PNG to the layer ALREADY
+// on the panel, instead of creating one. The three files here are picked one at
+// a time: the bottom-row binary lands beside the imported top-row category, and
+// the second top-row file then OVERWRITES that first category's pixels, which is
+// the last-file-wins rule the multi-file import already follows. The oracle is
+// the exported index PNG, decoded in Node, plus NPC unlocking on the two
+// categories that still hold pixels.
+// A single-PNG import names the LAYER after its file and leaves its categories
+// on the default names, so only the two appended categories carry file stems.
+const IMPORTED_LAYER_CATEGORY_NAMES = [
+  "Foreground",
+  stripExtension(maskBinaryBottom255Png.fileName),
+  stripExtension(maskBinary255Png.fileName),
+];
+
+const TOP_ROW_OVERWRITTEN_BY_THE_THIRD_CATEGORY = [3, 3, 3, 3];
+const UNLABELED_MIDDLE_ROWS = [0, 0, 0, 0, 0, 0, 0, 0];
+const BOTTOM_ROW_HOLDING_THE_SECOND_CATEGORY = [2, 2, 2, 2];
+
+const EXPECTED_APPENDED_MASK_VALUES = [
+  ...TOP_ROW_OVERWRITTEN_BY_THE_THIRD_CATEGORY,
+  ...UNLABELED_MIDDLE_ROWS,
+  ...BOTTOM_ROW_HOLDING_THE_SECOND_CATEGORY,
+];
+
+const IMAGE_DIMENSIONS = { width: multiBandTiff.width, height: multiBandTiff.height };
+
+test("adds each picked PNG as a new category of the imported layer", async () => {
+  const page = launched.window;
+
+  await openMasksOptions(page);
+  await importMaskFromPath(page, fixturePath(maskBinary1BitPng.fileName));
+  await expect(maskCategoryNameFields(page)).toHaveCount(1);
+  const readoutBefore = await readPixelValueAt(page, PANEL, 0, 0, IMAGE_DIMENSIONS);
+
+  await addMaskCategoriesFromPaths(page, [fixturePath(maskBinaryBottom255Png.fileName)]);
+  await expect(maskCategoryNameFields(page)).toHaveCount(2);
+  await addMaskCategoriesFromPaths(page, [fixturePath(maskBinary255Png.fileName)]);
+
+  await expectLayerListsTheThreeFileNamedCategories(page);
+  await expectTheLastPickedFileOwnsTheTopRow(page);
+  await expectNpcUnlocksOnTheTwoPaintedCategories(page);
+
+  const readoutAfter = await readPixelValueAt(page, PANEL, 0, 0, IMAGE_DIMENSIONS);
+  expect(readoutAfter.value).toBe(readoutBefore.value);
+});
+
+test("refuses picking more files than the layer has free category slots", async () => {
+  const page = launched.window;
+
+  await openMasksOptions(page);
+  await importMaskFromPath(page, fixturePath(maskMultibandPng.fileName));
+  await expect(maskCategoryNameFields(page)).toHaveCount(2);
+
+  await addMaskCategoriesFromPaths(page, [
+    fixturePath(maskBinary1BitPng.fileName),
+    fixturePath(maskBinary255Png.fileName),
+    fixturePath(maskBinaryBottom255Png.fileName),
+    fixturePath(maskBinary1BitPng.fileName),
+  ]);
+
+  await expect(
+    maskToastContaining(page, "This layer has 2 categories; pick at most 3 files."),
+  ).toBeVisible();
+  await expect(maskCategoryNameFields(page)).toHaveCount(2);
+});
+
+test("refuses a picked zip and points at the Import mask button", async () => {
+  const page = launched.window;
+
+  await openMasksOptions(page);
+  await importMaskFromPath(page, fixturePath(maskBinary1BitPng.fileName));
+  await expect(maskCategoryNameFields(page)).toHaveCount(1);
+
+  await addMaskCategoriesFromPaths(page, [fixturePath(maskMultibandCategoriesZip.fileName)]);
+
+  await expect(
+    maskToastContaining(
+      page,
+      "Add category from file takes PNG files. Import a zip with Import mask instead.",
+    ),
+  ).toBeVisible();
+  await expect(maskCategoryNameFields(page)).toHaveCount(1);
+});
+
+async function expectLayerListsTheThreeFileNamedCategories(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "Check the three file-named categories", async () => {
+    await expect(maskLayerOptions(page)).toHaveCount(1);
+    await expect(maskCategoryNameFields(page)).toHaveCount(3);
+    for (const [position, name] of IMPORTED_LAYER_CATEGORY_NAMES.entries()) {
+      await expect(maskCategoryNameField(page, position + 1)).toHaveValue(name);
+    }
+    await expect(addMaskCategoryFromFileButton(page)).toBeEnabled();
+  });
+}
+
+// The third category owns every top-row pixel the first one used to hold, and
+// its swatch is the third default colour, so the overlay tints that row with it.
+async function expectTheLastPickedFileOwnsTheTopRow(page: Page): Promise<void> {
+  await expect(maskCategoryColorField(page, 3)).toHaveValue(THIRD_DEFAULT_CATEGORY_COLOR);
+  const exportPath = join(await createTemporaryExportDirectory(), "added-categories-mask.zip");
+  const decoded = await exportSelectedMaskAndDecodeIndexPng(page, exportPath);
+  expect(decoded.values).toEqual(EXPECTED_APPENDED_MASK_VALUES);
+}
+
+const THIRD_DEFAULT_CATEGORY_COLOR = "#22c55e";
+
+// Categories 2 and 3 still hold pixels after the overwrite, which is exactly
+// what NPC needs; the first category was emptied by the last pick.
+async function expectNpcUnlocksOnTheTwoPaintedCategories(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "Check NPC unlocks on the two painted categories", async () => {
+    await closeMasksOptions(page);
+    await openOperation(page, NPC_PANEL_LABEL);
+    await expect(npcComputeButton(page)).toBeEnabled();
+  });
+}
 
 test("refuses a mask whose size does not match the stack", async () => {
   const page = launched.window;

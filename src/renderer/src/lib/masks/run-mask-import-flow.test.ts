@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { buildMaskLayerZipEntries } from "@/lib/masks/mask-export-zip";
 import { createMaskLayer, type MaskLayer } from "@/lib/masks/mask-layer";
+import { MASK_CATEGORY_FROM_ZIP_MESSAGE } from "@/lib/masks/mask-add-category-from-file";
 import { COMBINED_MASK_LAYER_NAME } from "@/lib/masks/mask-multi-file-import";
 import { encodeMaskValuesAsGrayscalePngBytes } from "@/lib/masks/mask-png-encode";
 import { ZIP_WITHOUT_MASK_PNGS_MESSAGE } from "@/lib/masks/mask-zip-import";
 import {
+  addMaskCategoriesFromFilesThroughOpenDialog,
   importMaskLayerThroughOpenDialog,
   type MaskImportFlowApi,
 } from "@/lib/masks/run-mask-import-flow";
@@ -234,5 +236,71 @@ describe("importMaskLayerThroughOpenDialog", () => {
       "Select at most 5 mask files, one per category.",
     );
     expect(api.readOpenedImageFile).not.toHaveBeenCalled();
+  });
+});
+
+// CT-332: the same picker, adding each picked PNG as a CATEGORY of the layer
+// already on the panel instead of building a new layer.
+describe("addMaskCategoriesFromFilesThroughOpenDialog", () => {
+  it("appends a category per picked PNG, named after its file", async () => {
+    const api = createFakeImportApi([
+      await buildMaskPngFile({ fileName: "gold leaf.png", values: [0, 0, 255, 0, 0, 0, 0, 0] }),
+    ]);
+
+    const added = await addMaskCategoriesFromFilesThroughOpenDialog(buildTwoCategoryLayer(), api);
+
+    expect(added.canceled).toBe(false);
+    if (added.canceled) return;
+    expect(added.layer.categories.map((category) => category.name)).toEqual([
+      "Parchment",
+      "Substrate",
+      "gold leaf",
+    ]);
+    expect(Array.from(added.layer.values)).toEqual([0, 1, 3, 0, 2, 2, 0, 0]);
+  });
+
+  it("reports a cancelled dialog without touching the layer", async () => {
+    const api = createCanceledImportApi();
+
+    expect(await addMaskCategoriesFromFilesThroughOpenDialog(buildTwoCategoryLayer(), api)).toEqual({
+      canceled: true,
+    });
+    expect(api.readOpenedImageFile).not.toHaveBeenCalled();
+  });
+
+  it("refuses a picked zip and points at the Import mask button", async () => {
+    const api = createFakeImportApi([await buildExportedMaskZipFile()]);
+
+    await expect(
+      addMaskCategoriesFromFilesThroughOpenDialog(buildTwoCategoryLayer(), api),
+    ).rejects.toThrow(MASK_CATEGORY_FROM_ZIP_MESSAGE);
+    expect(api.readOpenedImageFile).not.toHaveBeenCalled();
+  });
+
+  it("refuses more picked files than the layer has free category slots", async () => {
+    const files = await Promise.all(
+      Array.from({ length: 4 }, (_unused, index) =>
+        buildMaskPngFile({ fileName: `class-${index}.png`, values: [1, 0, 0, 0, 0, 0, 0, 0] }),
+      ),
+    );
+
+    await expect(
+      addMaskCategoriesFromFilesThroughOpenDialog(buildTwoCategoryLayer(), createFakeImportApi(files)),
+    ).rejects.toThrow("This layer has 2 categories; pick at most 3 files.");
+  });
+
+  it("refuses a picked file whose grid does not cover the stack, naming it", async () => {
+    const api = createFakeImportApi([
+      await buildMaskPngFile({
+        fileName: "wrong-size.png",
+        width: 8,
+        height: 8,
+        values: new Array(64).fill(0),
+      }),
+    ]);
+
+    await expect(
+      addMaskCategoriesFromFilesThroughOpenDialog(buildTwoCategoryLayer(), api),
+    ).rejects.toThrow("wrong-size.png: This mask is 8 x 8 but the stack is 4 x 2.");
   });
 });
