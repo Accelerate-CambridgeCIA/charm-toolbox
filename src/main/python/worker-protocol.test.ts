@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   encodeCubeFrameLengthPrefix,
   encodeRawBinaryFrame,
+  encodeSessionExecuteFrame,
   encodeWorkerRequestFrame,
   MalformedWorkerResponseError,
   WorkerResponseFrameDecoder,
@@ -63,6 +64,22 @@ describe("encodeWorkerRequestFrame", () => {
     });
   });
 
+  it("carries the session mode flag when the request opens a session (CT-334)", () => {
+    const frame = encodeWorkerRequestFrame({
+      type: "run-user-script",
+      mode: "session",
+      input: { kind: "builtin", directory: "C:/app/builtin-python", moduleName: "rop" },
+      cube: { shape: [2, 2, 2], dtype: "float32", wavelengths: null },
+      masks: null,
+      params: null,
+      resultKind: "cube",
+      cubeResultSpoolPath: null,
+      sandbox: true,
+    });
+    const parsed = JSON.parse(frame.subarray(4).toString("utf8")) as Record<string, unknown>;
+    expect(parsed["mode"]).toBe("session");
+  });
+
   it("measures multi-byte characters in bytes, not code units", () => {
     const frame = encodeWorkerRequestFrame({
       type: "run-user-script",
@@ -75,6 +92,25 @@ describe("encodeWorkerRequestFrame", () => {
       sandbox: true,
     });
     expect(frame.readUInt32LE(0)).toBe(frame.length - 4);
+  });
+});
+
+describe("encodeSessionExecuteFrame", () => {
+  it("prefixes the UTF-8 JSON execute payload with its little-endian byte length (CT-334)", () => {
+    const frame = encodeSessionExecuteFrame({
+      type: "execute",
+      params: { seed: 7, count: 1 },
+      cubeResultSpoolPath: "C:/tmp/msi-result.bin",
+      builtin: { directory: "C:/app/builtin-python", moduleName: "rop" },
+    });
+    const payload = frame.subarray(4);
+    expect(frame.readUInt32LE(0)).toBe(payload.length);
+    expect(JSON.parse(payload.toString("utf8"))).toEqual({
+      type: "execute",
+      params: { seed: 7, count: 1 },
+      cubeResultSpoolPath: "C:/tmp/msi-result.bin",
+      builtin: { directory: "C:/app/builtin-python", moduleName: "rop" },
+    });
   });
 });
 
