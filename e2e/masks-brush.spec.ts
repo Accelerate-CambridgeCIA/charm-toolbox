@@ -12,6 +12,7 @@ import {
   enableMaskEraser,
   exportSelectedMaskAndDecodeIndexPng,
   loadFixtureAsStack,
+  maskEraserToggle,
   openMasksOptions,
   paintMaskDotAtPagePoint,
   pagePointForImagePixelCenter,
@@ -121,6 +122,37 @@ test("paints the chosen category and erases it back to unlabeled", async () => {
   await expectExportedMaskValues(
     page,
     buildExpectedMaskValues(new Map([[pixelIndexOf(PAINTED_PIXEL.x, PAINTED_PIXEL.y), 2]])),
+  );
+});
+
+// CT-329: clicking the already-armed category while the eraser is on must
+// re-arm painting with it in one click, not require picking a different
+// category first. Painting category 1, then eraser, then category 1 again
+// (no other category in between) must resume painting category 1.
+test("clicking the same category after the eraser re-arms painting with it", async () => {
+  const page = launched.window;
+
+  await openMasksOptions(page);
+  await createMaskLayer(page);
+  await setMaskBrushSizeToOnePixel(page);
+  await selectMaskBrushCategory(page, 1);
+  await paintMaskStrokeBetweenPixels(page, PANEL, PAINTED_PIXEL, PAINTED_PIXEL, IMAGE);
+
+  await enableMaskEraser(page);
+  await selectMaskBrushCategory(page, 1);
+  await runAsStoryboardStep(page, "The eraser toggle is no longer pressed", async () => {
+    await expect(maskEraserToggle(page)).toHaveAttribute("aria-pressed", "false");
+  });
+  await paintMaskStrokeBetweenPixels(page, PANEL, STROKE_END_PIXEL, STROKE_END_PIXEL, IMAGE);
+
+  await expectExportedMaskValues(
+    page,
+    buildExpectedMaskValues(
+      new Map([
+        [pixelIndexOf(PAINTED_PIXEL.x, PAINTED_PIXEL.y), 1],
+        [pixelIndexOf(STROKE_END_PIXEL.x, STROKE_END_PIXEL.y), 1],
+      ]),
+    ),
   );
 });
 
