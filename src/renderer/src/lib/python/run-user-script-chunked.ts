@@ -100,7 +100,9 @@ export type UserScriptRunSessionOpenResult =
 
 // Throws OperationStoppedError on an aborted upload and rethrows transport
 // errors (releasing the begun run first); callers map those like the one-shot
-// wrappers below do.
+// wrappers below do. CT-335: a session exists to execute MANY times, so its
+// begin asks main for a resident worker (one interpreter loads the cube once
+// and answers every execute); the one-shot wrapper keeps spawning per run.
 export async function openUserScriptRunSessionOverCube(
   api: UserScriptRunChunkedApi,
   cube: UserScriptRunCubeInput,
@@ -110,7 +112,22 @@ export async function openUserScriptRunSessionOverCube(
   chunkBytes: number = USER_SCRIPT_RUN_CHUNK_BYTES,
   extras: UserScriptRunExtras = {},
 ): Promise<UserScriptRunSessionOpenResult> {
-  const begun = await api.beginUserScriptRun(buildBeginRequest(cube, source, resultKind, extras));
+  return openRunSessionOverCube(api, cube, source, resultKind, callbacks, chunkBytes, extras, true);
+}
+
+async function openRunSessionOverCube(
+  api: UserScriptRunChunkedApi,
+  cube: UserScriptRunCubeInput,
+  source: ToolboxRunUserScriptSource,
+  resultKind: ToolboxRunUserScriptResultKind,
+  callbacks: ChunkedUserScriptRunCallbacks,
+  chunkBytes: number,
+  extras: UserScriptRunExtras,
+  withResidentWorker: boolean,
+): Promise<UserScriptRunSessionOpenResult> {
+  const begun = await api.beginUserScriptRun(
+    buildBeginRequest(cube, source, resultKind, extras, withResidentWorker),
+  );
   if (begun.status !== "ready") return begun;
   callbacks.onRunReady?.();
   await uploadCubeAndMasksReleasingRunOnFailure(api, cube, begun.token, callbacks, chunkBytes, extras);
@@ -160,7 +177,7 @@ async function openSessionMappingTransferFailure(
   extras: UserScriptRunExtras,
 ): Promise<UserScriptRunSessionOpenResult> {
   try {
-    return await openUserScriptRunSessionOverCube(api, cube, source, resultKind, callbacks, chunkBytes, extras);
+    return await openRunSessionOverCube(api, cube, source, resultKind, callbacks, chunkBytes, extras, false);
   } catch (error) {
     if (isOperationStoppedError(error)) throw error;
     return { status: "failed", message: describeUserScriptRunTransferFailure(error) };
@@ -180,11 +197,14 @@ async function executeSessionMappingTransferFailure(
   }
 }
 
+// The residentWorker flag rides only session begins, so a one-shot begin
+// request stays byte-identical to what it was before CT-335.
 function buildBeginRequest(
   cube: UserScriptRunCubeInput,
   source: ToolboxRunUserScriptSource,
   resultKind: ToolboxRunUserScriptResultKind,
   extras: UserScriptRunExtras,
+  withResidentWorker: boolean,
 ): ToolboxUserScriptRunBeginRequest {
   const maskCount = extras.masks?.length ?? 0;
   return {
@@ -192,6 +212,7 @@ function buildBeginRequest(
     resultKind,
     cube: describeCube(cube),
     ...(maskCount > 0 ? { masks: { count: maskCount } } : {}),
+    ...(withResidentWorker ? { residentWorker: true } : {}),
   };
 }
 

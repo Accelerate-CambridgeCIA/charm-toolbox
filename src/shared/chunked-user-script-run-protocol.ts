@@ -112,6 +112,10 @@ export interface UserScriptRunBeginRequest {
   // CT-307: when present, count * height * width mask bytes are expected on
   // the chunk channel AFTER the cube bytes.
   readonly masks?: UserScriptRunMasksDescriptor;
+  // CT-335: a retained multi-execute session (the ROP aside) asks for a
+  // RESIDENT worker: one interpreter loads the cube once in session mode and
+  // answers every execute. Absent for one-shot runs, which spawn per execute.
+  readonly residentWorker?: boolean;
 }
 
 export type UserScriptRunBeginResult =

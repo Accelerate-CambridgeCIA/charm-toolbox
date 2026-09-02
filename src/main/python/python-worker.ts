@@ -4,6 +4,7 @@
 // with a user-facing message; this function never rejects for them.
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { EncodedCubePayload, EncodedMaskPayload } from "./cube-payload";
+import { recordPythonWorkerSpawnWhenE2eEnabled } from "./python-worker-spawn-count";
 import { PYTHON_WORKER_BOOTSTRAP_SOURCE } from "./worker-bootstrap";
 import {
   encodeCubeFrameLengthPrefix,
@@ -86,6 +87,7 @@ function requireCubeSpoolPathForCubeRuns(request: PythonWorkerRunRequest): strin
 // Exported for the resident session worker (CT-334), which spawns the same
 // bootstrap but keeps stdin open for execute frames.
 export function spawnPythonWorkerProcess(interpreterPath: string): ChildProcessWithoutNullStreams {
+  recordPythonWorkerSpawnWhenE2eEnabled();
   // -I (isolated) ignores PYTHON* environment variables and user site-packages;
   // the full bundled-mode sandbox is CT-208d.
   return spawn(interpreterPath, ["-I", "-X", "utf8", "-c", PYTHON_WORKER_BOOTSTRAP_SOURCE], {

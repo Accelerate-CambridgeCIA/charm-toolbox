@@ -8,6 +8,7 @@ import {
   type BeginChunkedUserScriptRunRequest,
   type ChunkedUserScriptRunSessionStore,
 } from "./chunked-user-script-run";
+import type { ResidentPythonWorkerSpawnRequest } from "./python-resident-worker";
 
 function buildBeginRequest(
   overrides: Partial<BeginChunkedUserScriptRunRequest> = {},
@@ -305,6 +306,136 @@ describe("chunked user-script run session store", () => {
     store.cancelExecutingRun(token);
     expect(killCount).toBe(1);
     expect(() => store.cancelExecutingRun("no-such-token")).not.toThrow();
+  });
+});
+
+// CT-335: a session begun with residentWorker owns ONE resident worker; the
+// store spawns it on the first acquire, hands the same instance back while it
+// lives, respawns from the retained spool after a kill, and kills it at
+// release. The spawn factory is injected, so these tests count spawns with a
+// stub instead of a real interpreter.
+interface FakeResidentWorker {
+  readonly spawnRequest: ResidentPythonWorkerSpawnRequest;
+  killCount: number;
+  execute: () => never;
+  kill: () => void;
+  isAlive: () => boolean;
+}
+
+function buildFakeResidentWorkerFactory(): {
+  spawned: FakeResidentWorker[];
+  spawn: (request: ResidentPythonWorkerSpawnRequest) => FakeResidentWorker;
+} {
+  const spawned: FakeResidentWorker[] = [];
+  return {
+    spawned,
+    spawn: (request) => {
+      const worker = buildFakeResidentWorker(request);
+      spawned.push(worker);
+      return worker;
+    },
+  };
+}
+
+function buildFakeResidentWorker(request: ResidentPythonWorkerSpawnRequest): FakeResidentWorker {
+  let alive = true;
+  const worker: FakeResidentWorker = {
+    spawnRequest: request,
+    killCount: 0,
+    execute: () => {
+      throw new Error("the store never executes; the IPC layer does");
+    },
+    kill: () => {
+      alive = false;
+      worker.killCount += 1;
+    },
+    isAlive: () => alive,
+  };
+  return worker;
+}
+
+describe("resident worker ownership (CT-335)", () => {
+  async function beginUploadedResidentSession(
+    store: ChunkedUserScriptRunSessionStore,
+    residentWorker = true,
+  ): Promise<string> {
+    const token = await store.begin(
+      buildBeginRequest({
+        cube: { bandCount: 1, height: 1, width: 1, wavelengths: null },
+        input: { kind: "builtin", directory: "builtins", moduleName: "rop" },
+        residentWorker,
+      }),
+    );
+    await store.appendCubeChunk(token, new Uint8Array(4));
+    return token;
+  }
+
+  function acquireForOneSettledExecute(
+    store: ChunkedUserScriptRunSessionStore,
+    token: string,
+  ): FakeResidentWorker {
+    store.takeExecutableRun(token);
+    const worker = store.acquireResidentWorkerForExecute(token, 1000);
+    store.markExecutionSettled(token);
+    return worker as unknown as FakeResidentWorker;
+  }
+
+  it("spawns exactly one resident worker across three executes", async () => {
+    const factory = buildFakeResidentWorkerFactory();
+    const store = createChunkedUserScriptRunSessionStore(64, tmpdir(), factory.spawn);
+    const token = await beginUploadedResidentSession(store);
+    const workers = [1, 2, 3].map(() => acquireForOneSettledExecute(store, token));
+    expect(factory.spawned).toHaveLength(1);
+    expect(workers[1]).toBe(workers[0]);
+    expect(workers[2]).toBe(workers[0]);
+    expect(factory.spawned[0]?.spawnRequest.timeoutMs).toBe(1000);
+    await store.release(token);
+  });
+
+  it("kills the resident worker at release", async () => {
+    const factory = buildFakeResidentWorkerFactory();
+    const store = createChunkedUserScriptRunSessionStore(64, tmpdir(), factory.spawn);
+    const token = await beginUploadedResidentSession(store);
+    acquireForOneSettledExecute(store, token);
+    await store.release(token);
+    expect(factory.spawned[0]?.killCount).toBe(1);
+  });
+
+  it("respawns exactly once after a kill between executes", async () => {
+    const factory = buildFakeResidentWorkerFactory();
+    const store = createChunkedUserScriptRunSessionStore(64, tmpdir(), factory.spawn);
+    const token = await beginUploadedResidentSession(store);
+    const first = acquireForOneSettledExecute(store, token);
+    first.kill();
+    const second = acquireForOneSettledExecute(store, token);
+    const third = acquireForOneSettledExecute(store, token);
+    expect(factory.spawned).toHaveLength(2);
+    expect(second).not.toBe(first);
+    expect(third).toBe(second);
+    await store.release(token);
+  });
+
+  it("streams the retained spool into a respawned worker", async () => {
+    const factory = buildFakeResidentWorkerFactory();
+    const store = createChunkedUserScriptRunSessionStore(64, tmpdir(), factory.spawn);
+    const token = await beginUploadedResidentSession(store);
+    acquireForOneSettledExecute(store, token).kill();
+    acquireForOneSettledExecute(store, token);
+    const respawnCube = factory.spawned[1]?.spawnRequest.cube;
+    expect(respawnCube?.totalByteLength).toBe(4);
+    expect(await collectSegments(respawnCube!.readSegments())).toEqual(new Uint8Array(4));
+    await store.release(token);
+  });
+
+  it("refuses to acquire a resident worker for a session begun without one", async () => {
+    const factory = buildFakeResidentWorkerFactory();
+    const store = createChunkedUserScriptRunSessionStore(64, tmpdir(), factory.spawn);
+    const token = await beginUploadedResidentSession(store, false);
+    store.takeExecutableRun(token);
+    expect(() => store.acquireResidentWorkerForExecute(token, 1000)).toThrow(
+      /not begun with a resident worker/,
+    );
+    await store.release(token);
   });
 });
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   describeUserScriptRunTransferFailure,
+  openUserScriptRunSessionOverCube,
   runUserScriptOverCubeInChunks,
   type UserScriptRunChunkedApi,
   type UserScriptRunCubeInput,
@@ -236,6 +237,24 @@ describe("runUserScriptOverCubeInChunks", () => {
     });
     expect(fractions).toEqual([0.5]);
     expect(record.progressListenerCount()).toBe(0);
+  });
+});
+
+// CT-335: a retained session exists to execute many times, so its begin asks
+// main for a resident worker; a one-shot begin must stay byte-identical to
+// what it sent before, so the flag is ABSENT there, not false.
+describe("resident worker begin flag (CT-335)", () => {
+  it("asks for a resident worker when opening a retained session", async () => {
+    const { api, record } = buildFakeApi();
+    const opened = await openUserScriptRunSessionOverCube(api, buildCubeInput([[1]], 1), FORMULA, "value");
+    expect(record.begins[0]?.residentWorker).toBe(true);
+    if (opened.status === "open") await opened.session.release();
+  });
+
+  it("sends a one-shot begin without any residentWorker property", async () => {
+    const { api, record } = buildFakeApi();
+    await runUserScriptOverCubeInChunks(api, buildCubeInput([[1]], 1), FORMULA, "value");
+    expect(record.begins[0]).not.toHaveProperty("residentWorker");
   });
 });
 

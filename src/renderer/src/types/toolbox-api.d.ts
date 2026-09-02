@@ -366,6 +366,9 @@ interface ToolboxUserScriptRunBeginRequest {
   // CT-307: when present, count * height * width mask bytes follow the cube
   // bytes on the chunk channel.
   masks?: { count: number };
+  // CT-335: a retained multi-execute session asks main for a resident worker;
+  // absent for one-shot runs, which spawn an interpreter per execute.
+  residentWorker?: boolean;
 }
 
 type ToolboxUserScriptRunBeginResult =

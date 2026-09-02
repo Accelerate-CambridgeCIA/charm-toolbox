@@ -8,6 +8,7 @@ import {
   multiBandTiff,
 } from "./fixtures/fixture-manifest";
 import { nonClearPixelFraction, summarizeCanvasPixels } from "./support/canvas-pixels";
+import { readPythonWorkerSpawnCount } from "./support/dialog-stub-controls";
 import { selectGridLayout } from "./support/grid-layout-controls";
 import { closeToolboxApp, launchToolboxApp } from "./support/launch-app";
 import type { LaunchedApp } from "./support/launch-app";
@@ -237,6 +238,31 @@ test("moves its source to the selected panel on request and starts over there", 
   await expectPanelMatchesTheReferenceProjection(page, CANDIDATE_PANEL);
 });
 
+// CT-335: the retained ROP session runs on ONE resident interpreter that
+// loaded the cube once, so three presses cost exactly one spawn. The oracle is
+// main's own spawn counter (toolboxE2E.readPythonWorkerSpawnCount, counting
+// one-shot and resident spawns alike), plus the pinned reference for the first
+// press (the resident path must not change what a press computes) and a third
+// press that really is a different projection.
+test("keeps one resident Python worker across three presses", async () => {
+  const page = launched.window;
+  const THIRD_SEED = FORCED_SEED + 2;
+
+  await openOperation(page, ROP_PANEL_LABEL);
+  const spawnsBeforeAnyPress = await readSpawnCountBeforeAnyPress(page);
+
+  await pressNewProjectionUntilProjectionReady(page, FORCED_SEED);
+  await expectPanelMatchesTheReferenceProjection(page, CANDIDATE_PANEL);
+
+  await setForcedRopSeed(page, OTHER_SEED);
+  await pressNewProjectionUntilProjectionReady(page, OTHER_SEED);
+  await setForcedRopSeed(page, THIRD_SEED);
+  await pressNewProjectionUntilProjectionReady(page, THIRD_SEED);
+  await expectPanelToDifferFromTheReferenceProjection(page, CANDIDATE_PANEL);
+
+  await expectSpawnCountRoseByExactlyOne(page, spawnsBeforeAnyPress);
+});
+
 test("locks the mask objectives until a layer with two painted categories exists", async () => {
   const page = launched.window;
 
@@ -297,6 +323,20 @@ async function expectTheNewSourcesPressToOpenAFurtherPanel(
   await runAsStoryboardStep(page, `The press from the new source opened panel ${panelNumber}`, async () => {
     await expect(panelCanvas(page, panelNumber)).toBeVisible();
     expect(await countPanels(page)).toBe(panelNumber);
+  });
+}
+
+async function readSpawnCountBeforeAnyPress(page: Page): Promise<number> {
+  let count = 0;
+  await runAsStoryboardStep(page, "Read the interpreter spawn count before any press", async () => {
+    count = await readPythonWorkerSpawnCount(page);
+  });
+  return count;
+}
+
+async function expectSpawnCountRoseByExactlyOne(page: Page, countBefore: number): Promise<void> {
+  await runAsStoryboardStep(page, "Three presses cost exactly one interpreter spawn", async () => {
+    expect(await readPythonWorkerSpawnCount(page)).toBe(countBefore + 1);
   });
 }
 

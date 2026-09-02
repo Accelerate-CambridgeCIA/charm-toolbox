@@ -638,6 +638,8 @@ const E2E_TEST_MODE_PRELOAD_ARGUMENT = "--msi-e2e-test-mode";
 const ENQUEUE_OPEN_DIALOG_PATHS_CHANNEL = "test:enqueue-open-dialog-paths";
 const ENQUEUE_SAVE_DIALOG_PATH_CHANNEL = "test:enqueue-save-dialog-path";
 const RESET_DIALOG_QUEUES_CHANNEL = "test:reset-dialog-queues";
+// Keep in sync with src/main/e2e-python-observability.ts.
+const READ_PYTHON_WORKER_SPAWN_COUNT_CHANNEL = "test:read-python-worker-spawn-count";
 
 function isE2eTestModeEnabled(): boolean {
   return process.argv.includes(E2E_TEST_MODE_PRELOAD_ARGUMENT);
@@ -653,6 +655,13 @@ function enqueueSaveDialogPathForTest(filePath: string): Promise<void> {
 
 function resetDialogQueuesForTest(): Promise<void> {
   return ipcRenderer.invoke(RESET_DIALOG_QUEUES_CHANNEL) as Promise<void>;
+}
+
+// CT-335: how many Python interpreters main has spawned since launch
+// (one-shot and resident alike), so a spec can prove the ROP session keeps
+// one resident worker across presses.
+function readPythonWorkerSpawnCountForTest(): Promise<number> {
+  return ipcRenderer.invoke(READ_PYTHON_WORKER_SPAWN_COUNT_CHANNEL) as Promise<number>;
 }
 
 // CT-309: a forced ROP seed (see src/shared/e2e-rop-seed-argument.ts) so a
@@ -679,6 +688,7 @@ const e2eTestBridge = {
   memoryBudgetOverrideBytes: readMemoryBudgetOverrideBytesFromArguments(process.argv),
   readRopForcedSeedOverride: readRopForcedSeedOverrideForTest,
   setRopForcedSeedOverride: setRopForcedSeedOverrideForTest,
+  readPythonWorkerSpawnCount: readPythonWorkerSpawnCountForTest,
 } as const;
 
 export type ToolboxE2eBridge = typeof e2eTestBridge;

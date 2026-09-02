@@ -4,6 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { EncodedCubePayload, EncodedMaskPayload } from "./cube-payload";
+import {
+  spawnResidentPythonWorker,
+  type ResidentPythonWorker,
+  type ResidentPythonWorkerSpawnRequest,
+} from "./python-resident-worker";
 import type { UserScriptInput } from "./worker-protocol";
 import {
   USER_SCRIPT_RUN_CHUNK_BYTES,
@@ -34,6 +39,9 @@ export interface BeginChunkedUserScriptRunRequest {
   readonly sourceName: string | null;
   readonly interpreterPath: string;
   readonly sandbox: boolean;
+  // CT-335: a retained multi-execute session (the ROP aside) executes on ONE
+  // resident worker instead of spawning an interpreter per execute.
+  readonly residentWorker?: boolean;
 }
 
 export interface ExecutableUserScriptRun {
@@ -47,7 +55,16 @@ export interface ExecutableUserScriptRun {
   // Where the worker harness spools a cube result's raw bytes; pull chunks are
   // read back from this file so the result never materializes in main either.
   readonly cubeResultSpoolPath: string;
+  // CT-335: true when this session's executes go through the resident worker
+  // (acquireResidentWorkerForExecute) rather than a per-execute subprocess.
+  readonly usesResidentWorker: boolean;
 }
+
+// Injected so the store's resident-worker bookkeeping unit-tests with a stub
+// factory instead of a real interpreter spawn.
+export type SpawnResidentWorkerForSession = (
+  request: ResidentPythonWorkerSpawnRequest,
+) => ResidentPythonWorker;
 
 export interface StoredCubeResultSummary {
   readonly totalBytes: number;
@@ -63,6 +80,13 @@ export interface ChunkedUserScriptRunSessionStore {
   // CT-307: marks the in-flight execute finished so the next execute may start;
   // input resources are released by release(), not here.
   markExecutionSettled(token: string): void;
+  // CT-335: for a session begun with residentWorker - returns the live
+  // resident worker, spawning one (first execute) or respawning from the
+  // RETAINED spool (after a cancel kill, crash, or timeout killed the last
+  // one), so a stopped press never wedges the session. The per-execute
+  // timeout is fixed at spawn; the spawn-and-load time counts against the
+  // first execute only (the worker's timer starts inside execute()).
+  acquireResidentWorkerForExecute(token: string, timeoutMs: number): ResidentPythonWorker;
   storeCubeResultForPull(
     token: string,
     shape: [number, number, number],
@@ -102,6 +126,9 @@ interface ChunkedUserScriptRunSession {
   hasReleasedInputResources: boolean;
   resultPull: PendingCubeResultPull | null;
   killExecutingWorker: (() => void) | null;
+  // CT-335: the session's resident worker; null until the first acquire, and
+  // replaced by the next acquire once it has died.
+  residentWorker: ResidentPythonWorker | null;
 }
 
 function expectedUploadBytesOfSession(session: ChunkedUserScriptRunSession): number {
@@ -111,6 +138,7 @@ function expectedUploadBytesOfSession(session: ChunkedUserScriptRunSession): num
 export function createChunkedUserScriptRunSessionStore(
   chunkBytes: number = USER_SCRIPT_RUN_CHUNK_BYTES,
   temporaryDirectory: string = tmpdir(),
+  spawnResidentWorker: SpawnResidentWorkerForSession = spawnResidentPythonWorker,
 ): ChunkedUserScriptRunSessionStore {
   const sessions = new Map<string, ChunkedUserScriptRunSession>();
   return {
@@ -122,6 +150,8 @@ export function createChunkedUserScriptRunSessionStore(
       const session = sessions.get(token);
       if (session) session.isExecuting = false;
     },
+    acquireResidentWorkerForExecute: (token, timeoutMs) =>
+      acquireResidentWorkerFromSession(requireSession(sessions, token), chunkBytes, spawnResidentWorker, timeoutMs),
     storeCubeResultForPull: (token, shape, bands) =>
       storeCubeResultOnSession(requireSession(sessions, token), shape, bands),
     readNextResultChunk: async (token) =>
@@ -157,6 +187,7 @@ async function beginSession(
     hasReleasedInputResources: false,
     resultPull: null,
     killExecutingWorker: null,
+    residentWorker: null,
   });
   return token;
 }
@@ -267,6 +298,45 @@ function describeExecutableRun(
     interpreterPath: request.interpreterPath,
     sandbox: request.sandbox,
     cubeResultSpoolPath: session.resultSpoolPath,
+    usesResidentWorker: request.residentWorker === true,
+  };
+}
+
+// CT-335: one resident worker per session, replaced only after it died. The
+// respawn streams the RETAINED spool back into a fresh interpreter, so a
+// cancel kill, crash, or timeout costs one spawn-and-load and never a
+// re-upload; killing a dead worker's handle first is a harmless no-op that
+// keeps the replacement unconditional.
+function acquireResidentWorkerFromSession(
+  session: ChunkedUserScriptRunSession,
+  chunkBytes: number,
+  spawnResidentWorker: SpawnResidentWorkerForSession,
+  timeoutMs: number,
+): ResidentPythonWorker {
+  if (session.request.residentWorker !== true) {
+    throw new Error("This user-script run was not begun with a resident worker");
+  }
+  const live = session.residentWorker;
+  if (live !== null && live.isAlive()) return live;
+  live?.kill();
+  session.residentWorker = spawnResidentWorker(buildResidentWorkerSpawnRequest(session, chunkBytes, timeoutMs));
+  return session.residentWorker;
+}
+
+function buildResidentWorkerSpawnRequest(
+  session: ChunkedUserScriptRunSession,
+  chunkBytes: number,
+  timeoutMs: number,
+): ResidentPythonWorkerSpawnRequest {
+  const run = describeExecutableRun(session, chunkBytes);
+  return {
+    interpreterPath: run.interpreterPath,
+    input: run.input,
+    cube: run.cube,
+    masks: run.masks,
+    resultKind: run.resultKind,
+    sandbox: run.sandbox,
+    timeoutMs,
   };
 }
 
@@ -404,8 +474,16 @@ async function releaseSessionDiscardingState(
   const session = sessions.get(token);
   if (session === undefined) return;
   sessions.delete(token);
+  killResidentWorkerOfSession(session);
   await discardResultSpool(session);
   await releaseSessionInputResources(session);
+}
+
+// CT-335: the resident worker has no idle timeout; it dies here with its
+// session (and, since main's exit closes its stdin pipe, with the app).
+function killResidentWorkerOfSession(session: ChunkedUserScriptRunSession): void {
+  session.residentWorker?.kill();
+  session.residentWorker = null;
 }
 
 async function discardResultSpool(session: ChunkedUserScriptRunSession): Promise<void> {
