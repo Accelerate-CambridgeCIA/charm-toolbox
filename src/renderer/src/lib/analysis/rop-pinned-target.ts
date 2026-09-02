@@ -61,3 +61,18 @@ function findRasterAtPanelIndexOrNull(
   if (!content || content.source.kind !== "raster") return null;
   return content.source.raster;
 }
+
+// CT-333: "Use selected panel" is the one explicit way to MOVE the pin. Unlike
+// resolveNextRopPin, which only follows selection until it first lands, this
+// re-pins on demand: the button press is the deliberate act, so no confirmation
+// stands between it and the new source. Re-pinning to the panel already pinned
+// returns the previous object, so the aside never resets on a no-op press.
+export function repinRopToSelection(
+  previous: RopPinnedPanel | null,
+  selection: RopPinSelection | null,
+  panels: RopPinPanelsByIndex,
+): RopPinnedPanel | null {
+  if (selection === null) return null;
+  if (previous !== null && previous.viewportIndex === selection.viewportIndex) return previous;
+  return pinToSelectedRasterPanelOrNull(selection, panels);
+}

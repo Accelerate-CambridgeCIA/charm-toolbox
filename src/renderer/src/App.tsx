@@ -45,6 +45,7 @@ import {
 import {
   RopOptionsPanel,
   type RopPanelTarget,
+  type RopRepinOffer,
 } from "@/components/rop-options-panel";
 import {
   buildRopCandidateDeliveryPort,
@@ -53,6 +54,7 @@ import {
 import { keepRopCandidateAsNewStack } from "@/lib/analysis/rop-keep-flow";
 import {
   hasPinnedRopPanelLostItsRaster,
+  repinRopToSelection,
   resolveNextRopPin,
   type RopPinnedPanel,
   type RopPinSelection,
@@ -504,6 +506,7 @@ function ApplicationShell(): JSX.Element {
     ? resolveNextRopPin(pinnedRopPanel, toRopPinSelectionOrNull(singleSelectedSource), imagesByIndex)
     : null;
   useRopPinRetainedAcrossSelectionChanges(ropPin, pinnedRopPanel, setPinnedRopPanel);
+  const ropRepinTarget = deriveRopRepinTargetOrNull(ropPin, singleSelectedSource, imagesByIndex);
   useRopAsideClosedWithItsPinnedPanel({
     isRopPanelOpen,
     pinnedRopPanel,
@@ -675,6 +678,10 @@ function ApplicationShell(): JSX.Element {
                 onCloseCnrPanel={() => setIsCnrPanelOpen(false)}
                 isRopPanelOpen={isRopPanelOpen}
                 ropTarget={deriveRopPanelTargetOrNull(ropPin, renderingApi)}
+                ropRepinOffer={{
+                  selectedPanelNumber: ropRepinTarget?.viewportNumber ?? null,
+                  onUseSelectedPanel: () => setPinnedRopPanel(ropRepinTarget),
+                }}
                 ropCandidateDelivery={buildRopCandidateDeliveryPort(
                   ropPin?.viewportIndex ?? null,
                   applyActionFlowBindings,
@@ -793,6 +800,7 @@ interface ApplicationStageContentProps {
   onCloseCnrPanel: () => void;
   isRopPanelOpen: boolean;
   ropTarget: RopPanelTarget | null;
+  ropRepinOffer: RopRepinOffer;
   ropCandidateDelivery: RopCandidateDeliveryPort;
   onKeepRopCandidateAsNewStack: (request: RopKeepRequest) => void;
   onCloseRopPanel: () => void;
@@ -844,6 +852,7 @@ function renderActiveRightSidePanel(props: ApplicationStageContentProps): JSX.El
       <RopOptionsPanel
         target={props.ropTarget}
         candidateDelivery={props.ropCandidateDelivery}
+        repinOffer={props.ropRepinOffer}
         onKeepCandidateAsNewStack={props.onKeepRopCandidateAsNewStack}
         onClose={props.onCloseRopPanel}
       />
@@ -944,6 +953,19 @@ function deriveRopPanelTargetOrNull(
     raster: ropPin.raster,
     masks: renderingApi.getRenderingState(ropPin.viewportIndex).masks,
   };
+}
+
+// CT-333: the offer behind "Use selected panel". It is the repin the button
+// WOULD make, and null whenever that press would change nothing: no single
+// panel selected, the selected panel holds no raster, or it is already pinned.
+function deriveRopRepinTargetOrNull(
+  ropPin: RopPinnedPanel | null,
+  singleSelectedSource: SingleSelectedSource | null,
+  imagesByIndex: ImagesByIndexMap,
+): RopPinnedPanel | null {
+  const selection = toRopPinSelectionOrNull(singleSelectedSource);
+  const repinned = repinRopToSelection(ropPin, selection, imagesByIndex);
+  return repinned === ropPin ? null : repinned;
 }
 
 function toRopPinSelectionOrNull(

@@ -32,6 +32,23 @@ export function ropPinnedPanelReadout(page: Page): Locator {
   return ropOptionsPanel(page).getByText(/^Panel \d+$/);
 }
 
+// CT-333: the aside names the panel it projects from, and moves to the
+// selected panel only through its own button.
+export function ropSourcePanelReadout(page: Page): Locator {
+  return ropOptionsPanel(page).locator('output[aria-label="ROP source panel"]');
+}
+
+export function ropUseSelectedPanelButton(page: Page): Locator {
+  return ropOptionsPanel(page).getByRole("button", { name: "Use selected panel" });
+}
+
+export async function useTheSelectedPanelAsRopSource(page: Page, panelNumber: number): Promise<void> {
+  await runAsStoryboardStep(page, `Project from the selected panel ${panelNumber}`, async () => {
+    await ropUseSelectedPanelButton(page).click();
+    await expect(ropSourcePanelReadout(page)).toHaveText(`Projecting from Panel ${panelNumber}`);
+  });
+}
+
 export function ropObjectivePicker(page: Page): Locator {
   return ropOptionsPanel(page).getByRole("combobox", { name: "Objective" });
 }

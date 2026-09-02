@@ -559,6 +559,8 @@ export {
   ropScoreReadout,
   ropSearchButton,
   ropSeedReadout,
+  ropSourcePanelReadout,
+  ropUseSelectedPanelButton,
   ROP_NO_CANDIDATE_TEXT,
   ROP_PANEL_LABEL,
   ROP_PRESS_REFUSED_TEXT,
@@ -566,6 +568,7 @@ export {
   setForcedRopSeed,
   setRopProjectionCount,
   startRopProjectionSearch,
+  useTheSelectedPanelAsRopSource,
 } from "./rop-panel";
 export { enqueueOpenDialogPaths } from "./dialog-stub-controls";
 export { reimportPanelSourceFromDisk, reimportSuccessToast } from "./reimport-source";

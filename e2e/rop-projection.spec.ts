@@ -40,11 +40,14 @@ import {
   ropPinnedPanelReadout,
   ropScoreReadout,
   ropSeedReadout,
+  ropSourcePanelReadout,
+  ropUseSelectedPanelButton,
   ROP_NO_CANDIDATE_TEXT,
   ROP_PANEL_LABEL,
   ROP_PRESS_REFUSED_TEXT,
   selectPanel,
   setForcedRopSeed,
+  useTheSelectedPanelAsRopSource,
 } from "./support/page-objects";
 import { runAsStoryboardStep } from "./support/storyboard-step";
 
@@ -207,6 +210,33 @@ test("stays pinned to its source panel when a duplicate takes the selection", as
   await expectPanelMatchesTheReferenceProjection(page, CANDIDATE_PANEL);
 });
 
+// CT-333: the pin moves on ONE deliberate act. The aside names its source
+// panel, offers the selected panel by number, and re-pinning starts the
+// session over on the new stack: no candidate, nothing to keep, and the
+// candidate panel from the old source left behind as an ordinary stack.
+test("moves its source to the selected panel on request and starts over there", async () => {
+  const page = launched.window;
+  const DUPLICATE_PANEL = 3;
+  const PANEL_COUNT_BEFORE_THE_NEXT_PRESS = 3;
+  const REPINNED_CANDIDATE_PANEL = 4;
+
+  await openOperation(page, ROP_PANEL_LABEL);
+  await expectRopAsideToProjectFromPanel(page, SOURCE_PANEL);
+  await pressNewProjectionUntilProjectionReady(page, FORCED_SEED);
+
+  await duplicateSourcePanelAndSelectTheCopy(page, DUPLICATE_PANEL);
+  await expectRopAsideToProjectFromPanel(page, SOURCE_PANEL);
+  await expectUseSelectedPanelToOfferPanel(page, DUPLICATE_PANEL);
+
+  await useTheSelectedPanelAsRopSource(page, DUPLICATE_PANEL);
+  await expectRopAsideToHaveStartedOverOnPanel(page, DUPLICATE_PANEL, PANEL_COUNT_BEFORE_THE_NEXT_PRESS);
+
+  await setForcedRopSeed(page, OTHER_SEED);
+  await pressNewProjectionUntilProjectionReady(page, OTHER_SEED);
+  await expectTheNewSourcesPressToOpenAFurtherPanel(page, REPINNED_CANDIDATE_PANEL);
+  await expectPanelMatchesTheReferenceProjection(page, CANDIDATE_PANEL);
+});
+
 test("locks the mask objectives until a layer with two painted categories exists", async () => {
   const page = launched.window;
 
@@ -227,6 +257,48 @@ test("locks the mask objectives until a layer with two painted categories exists
   );
   await expect(ropOptionsPanel(page)).not.toContainText("painted pixels");
 });
+
+async function expectRopAsideToProjectFromPanel(page: Page, panelNumber: number): Promise<void> {
+  await runAsStoryboardStep(page, `The ROP aside projects from panel ${panelNumber}`, async () => {
+    await expect(ropSourcePanelReadout(page)).toHaveText(`Projecting from Panel ${panelNumber}`);
+    await expect(ropPinnedPanelReadout(page)).toHaveText(`Panel ${panelNumber}`);
+  });
+}
+
+async function expectUseSelectedPanelToOfferPanel(page: Page, panelNumber: number): Promise<void> {
+  await runAsStoryboardStep(page, `Use selected panel offers panel ${panelNumber}`, async () => {
+    await expect(ropUseSelectedPanelButton(page)).toBeEnabled();
+    await expect(ropUseSelectedPanelButton(page)).toHaveText(
+      `Use selected panel (Panel ${panelNumber})`,
+    );
+  });
+}
+
+// Re-pinning releases the retained session, so the aside holds no candidate and
+// no pointer to freeze; the old source's candidate panel simply stays on screen.
+async function expectRopAsideToHaveStartedOverOnPanel(
+  page: Page,
+  panelNumber: number,
+  expectedPanelCount: number,
+): Promise<void> {
+  await runAsStoryboardStep(page, `The aside starts over on panel ${panelNumber}`, async () => {
+    await expect(ropPinnedPanelReadout(page)).toHaveText(`Panel ${panelNumber}`);
+    await expect(ropSeedReadout(page)).toHaveText(ROP_NO_CANDIDATE_TEXT);
+    await expect(ropKeepButton(page)).toBeDisabled();
+    await expect(ropUseSelectedPanelButton(page)).toBeDisabled();
+    expect(await countPanels(page)).toBe(expectedPanelCount);
+  });
+}
+
+async function expectTheNewSourcesPressToOpenAFurtherPanel(
+  page: Page,
+  panelNumber: number,
+): Promise<void> {
+  await runAsStoryboardStep(page, `The press from the new source opened panel ${panelNumber}`, async () => {
+    await expect(panelCanvas(page, panelNumber)).toBeVisible();
+    expect(await countPanels(page)).toBe(panelNumber);
+  });
+}
 
 async function importTheParchmentMask(page: Page): Promise<void> {
   await openMasksOptions(page);

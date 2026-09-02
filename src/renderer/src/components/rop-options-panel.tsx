@@ -87,9 +87,18 @@ export interface RopPanelTarget {
   readonly masks: MaskPanelState;
 }
 
+// CT-333: the aside stays PINNED to its source panel and moves only through
+// "Use selected panel". App offers the panel that press would move to, or null
+// when nothing eligible is selected.
+export interface RopRepinOffer {
+  readonly selectedPanelNumber: number | null;
+  readonly onUseSelectedPanel: () => void;
+}
+
 export interface RopOptionsPanelProps {
   readonly target: RopPanelTarget | null;
   readonly candidateDelivery: RopCandidateDeliveryPort;
+  readonly repinOffer: RopRepinOffer;
   readonly onKeepCandidateAsNewStack: (request: RopKeepRequest) => void;
   readonly onClose: () => void;
 }
@@ -105,6 +114,7 @@ export function RopOptionsPanel(props: RopOptionsPanelProps): JSX.Element {
         <RopPanelBody
           target={props.target}
           candidateDelivery={props.candidateDelivery}
+          repinOffer={props.repinOffer}
           onKeepCandidateAsNewStack={props.onKeepCandidateAsNewStack}
         />
       </div>
@@ -152,6 +162,7 @@ function RopPanelCloseButton({ onClose }: { readonly onClose: () => void }): JSX
 interface RopPanelBodyProps {
   readonly target: RopPanelTarget | null;
   readonly candidateDelivery: RopCandidateDeliveryPort;
+  readonly repinOffer: RopRepinOffer;
   readonly onKeepCandidateAsNewStack: (request: RopKeepRequest) => void;
 }
 
@@ -160,6 +171,11 @@ function RopPanelBody(props: RopPanelBodyProps): JSX.Element {
   return (
     <>
       <RopExplanation />
+      <RopSourcePanelSection
+        sourcePanelNumber={props.target?.viewportNumber ?? null}
+        repinOffer={props.repinOffer}
+        isRunning={controller.isRolling || controller.isSearching}
+      />
       <RopObjectiveSection controller={controller} />
       <RopNewProjectionButton controller={controller} />
       <RopCandidateReadout controller={controller} />
@@ -181,12 +197,77 @@ function RopExplanation(): JSX.Element {
   return (
     <p className="text-xs text-muted-foreground">
       Each press of New projection opens a fresh random orthogonal projection of
-      this stack as a one-band stack in its own panel; the next press replaces
-      it. Keep freezes the one on screen so it is not replaced; with an
-      objective selected the best-scoring candidate is always retained.
+      the source panel as a stack in its own panel; the next press replaces it.
+      Keep freezes the one on screen so it is not replaced; a search winner is
+      kept automatically. With an objective selected the best-scoring candidate
+      is always retained.
     </p>
   );
 }
+
+interface RopSourcePanelSectionProps {
+  readonly sourcePanelNumber: number | null;
+  readonly repinOffer: RopRepinOffer;
+  readonly isRunning: boolean;
+}
+
+function RopSourcePanelSection(props: RopSourcePanelSectionProps): JSX.Element {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <output aria-label="ROP source panel" className="text-xs text-muted-foreground">
+        {describeRopSourcePanel(props.sourcePanelNumber)}
+      </output>
+      <UseSelectedPanelButton offer={props.repinOffer} isRunning={props.isRunning} />
+    </div>
+  );
+}
+
+function describeRopSourcePanel(sourcePanelNumber: number | null): string {
+  if (sourcePanelNumber === null) return NO_SOURCE_PANEL_TEXT;
+  return `Projecting from Panel ${sourcePanelNumber}`;
+}
+
+interface UseSelectedPanelButtonProps {
+  readonly offer: RopRepinOffer;
+  readonly isRunning: boolean;
+}
+
+function UseSelectedPanelButton(props: UseSelectedPanelButtonProps): JSX.Element {
+  const offeredPanelNumber = props.offer.selectedPanelNumber;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Use selected panel"
+            disabled={offeredPanelNumber === null || props.isRunning}
+            onClick={props.offer.onUseSelectedPanel}
+          >
+            {describeUseSelectedPanelLabel(offeredPanelNumber)}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{describeUseSelectedPanelTooltip(offeredPanelNumber)}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function describeUseSelectedPanelLabel(offeredPanelNumber: number | null): string {
+  if (offeredPanelNumber === null) return USE_SELECTED_PANEL_TEXT;
+  return `${USE_SELECTED_PANEL_TEXT} (Panel ${offeredPanelNumber})`;
+}
+
+function describeUseSelectedPanelTooltip(offeredPanelNumber: number | null): string {
+  if (offeredPanelNumber === null) return NO_OTHER_STACK_SELECTED_TEXT;
+  return `Project from Panel ${offeredPanelNumber} instead.`;
+}
+
+const NO_SOURCE_PANEL_TEXT = "No source panel";
+const USE_SELECTED_PANEL_TEXT = "Use selected panel";
+const NO_OTHER_STACK_SELECTED_TEXT = "Select one other stack to project from it.";
 
 // --- Objective controls ------------------------------------------------------
 
