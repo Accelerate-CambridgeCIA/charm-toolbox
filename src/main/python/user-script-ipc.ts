@@ -43,6 +43,7 @@ import {
   USER_SCRIPT_RUN_PROGRESS_CHANNEL,
   USER_SCRIPT_RUN_RELEASE_CHANNEL,
   USER_SCRIPT_RUN_RESULT_CHUNK_CHANNEL,
+  isBuiltinScriptName,
   type UserScriptRunBeginRequest,
   type UserScriptRunBeginResult,
   type UserScriptRunCubeChunkRequest,
@@ -307,10 +308,21 @@ function executeOnSessionResidentWorker(
   sessions.registerExecutingWorkerKill(request.token, () => worker.kill());
   return worker.execute(
     sanitizeExecuteParamsOrNull(request.params),
-    { directory: builtin.directory, moduleName: builtin.moduleName },
+    { directory: builtin.directory, moduleName: resolveResidentExecuteModuleName(request, builtin.moduleName) },
     run.resultKind === "cube" ? run.cubeResultSpoolPath : null,
     { onProgress: (fraction) => sendRunProgressToRenderer(event.sender, request.token, fraction) },
   );
+}
+
+// CT-336: an execute may name a different built-in module in the session's own
+// directory (ROP's search runs rop_search). Only a known built-in name is
+// honoured, so a bad request can never smuggle an arbitrary module import.
+function resolveResidentExecuteModuleName(
+  request: UserScriptRunExecuteRequest,
+  sessionModuleName: string,
+): string {
+  const override = request.builtinModuleName;
+  return override !== undefined && isBuiltinScriptName(override) ? override : sessionModuleName;
 }
 
 // CT-268: the worker registers its cancel trigger with the session store while

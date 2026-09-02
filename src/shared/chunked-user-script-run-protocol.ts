@@ -136,6 +136,11 @@ export interface UserScriptRunExecuteRequest {
   // positional argument). A session can execute more than once against its
   // retained spooled cube, each time with fresh params (ROP's press-to-reroll).
   readonly params?: UserScriptRunParams;
+  // CT-336: a resident session may run a DIFFERENT built-in module per execute
+  // (the ROP press runs rop, its search runs rop_search from the same session's
+  // directory). Absent means the session's opening module. Only a known
+  // built-in name is honoured; the directory stays the session's own.
+  readonly builtinModuleName?: BuiltinScriptName;
 }
 
 // A completed cube run answers with the shape only; the band bytes are pulled

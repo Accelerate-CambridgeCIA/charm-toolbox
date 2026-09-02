@@ -1252,6 +1252,34 @@ function listBuiltinScriptReferenceRequests(fixtures) {
         },
       },
     },
+    // CT-336: the same seeded 50-candidate search under the CNR objective
+    // (scored INSIDE the resident worker), so the CT-336 e2e can prove the
+    // press -> search -> press sequence costs one interpreter spawn (CNR scores
+    // in TS, so no per-candidate one-shot run) while still pinning the winner.
+    // Every band of multiband-12bit is an affine transform of one ramp, so CNR
+    // scores all 50 candidates near-identically and float noise, not the first
+    // draw, decides the winner: a search that never looped could not match it.
+    ropSearchCnr: {
+      script: "rop_search",
+      fixture: fixtures.multiBandTiff.fileName,
+      maskFixture: fixtures.maskMultibandPng.fileName,
+      params: {
+        seed: ROP_REFERENCE_SEED,
+        count: ROP_SEARCH_REFERENCE_PROJECTION_COUNT,
+        objective: "cnr",
+      },
+      request: {
+        cube: multibandCube,
+        masks: multibandMasks,
+        params: {
+          seed: ROP_REFERENCE_SEED,
+          count: ROP_SEARCH_REFERENCE_PROJECTION_COUNT,
+          objective: "cnr",
+          text_mask_index: 0,
+          background_mask_index: 1,
+        },
+      },
+    },
     l2Minimization: {
       script: "l2_minimization",
       fixture: fixtures.multiBandTiff.fileName,

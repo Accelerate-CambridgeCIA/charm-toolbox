@@ -131,6 +131,11 @@ export interface BuiltinScriptReferences {
   // objective - or never looped - cannot match it.
   readonly ropSearch: BuiltinScriptCubeReference;
   readonly ropSearchScore: BuiltinScriptValueReference;
+  // CT-336: the best of the same 50 seeded candidates under the CNR objective
+  // (scored inside the resident worker). Used by the press -> search -> press
+  // spawn-count e2e, where CNR keeps scoring in TS so the whole sequence costs
+  // one interpreter spawn. Deterministic given the seed, but not the first draw.
+  readonly ropSearchCnr: BuiltinScriptCubeReference;
   readonly l2Minimization: BuiltinScriptCubeReference;
   readonly localPca: BuiltinScriptCubeReference;
   readonly localMnf: BuiltinScriptCubeReference;

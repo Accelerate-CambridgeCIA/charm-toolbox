@@ -41,13 +41,12 @@ import {
   readForcedRopSeedFromE2eBridgeOrNull,
 } from "@/lib/analysis/rop-run-request";
 import { listNonEmptyCategoryValuesInMaskLayer } from "@/lib/analysis/npc-qualification";
-import { DEFAULT_NPC_BIN_COUNT } from "@/lib/analysis/npc-run-request";
+import { DEFAULT_NPC_BIN_COUNT, buildNpcCategoryMasks } from "@/lib/analysis/npc-run-request";
 import {
   DEFAULT_ROP_SEARCH_PROJECTION_COUNT,
   parseRopSearchProjectionCountOrNull,
   type RopSearchRunRequest,
 } from "@/lib/analysis/rop-search-request";
-import { searchBestRopProjectionShowingPanelBusy } from "@/lib/analysis/run-rop-search";
 import {
   createRopProjectionSessionHolder,
   scoreRopCandidateShowingPanelBusy,
@@ -865,7 +864,7 @@ function executeProjectionForSeed(
   target: RopPanelTarget,
   seed: number,
 ): Promise<RopRollOutcome> {
-  const holder = takeOrCreateSessionHolderForRaster(press.sessionRef, target.raster);
+  const holder = takeOrCreateSessionHolderForRaster(press.sessionRef, target.raster, press.derived);
   return holder.executeProjectionShowingPanelBusy(seed, {
     busyRegistrar: press.busyRegistrar,
     viewportIndex: target.viewportIndex,
@@ -887,17 +886,26 @@ async function deliverCandidateToItsPanel(
   press.setState((previous) => ({ ...previous, liveCandidatePanel: delivered }));
 }
 
+// CT-336: the session uploads the qualifying layer's category masks so its
+// search objective can score without a second upload; rop.py ignores them, so a
+// plain press is unaffected. Painting is impossible while the ROP aside is open,
+// so the masks captured here stay valid for the life of the session.
 function takeOrCreateSessionHolderForRaster(
   sessionRef: React.MutableRefObject<RopSessionSlot | null>,
   raster: RasterImage,
+  derived: RopControllerReadouts,
 ): RopProjectionSessionHolder {
   if (sessionRef.current !== null && sessionRef.current.raster === raster) {
     return sessionRef.current.holder;
   }
   releaseRopSessionSlot(sessionRef);
-  const holder = createRopProjectionSessionHolder(raster);
+  const holder = createRopProjectionSessionHolder(raster, buildRopSessionMaskBytes(derived));
   sessionRef.current = { raster, holder };
   return holder;
+}
+
+function buildRopSessionMaskBytes(derived: RopControllerReadouts): ReadonlyArray<Uint8Array> {
+  return derived.qualifyingLayer === null ? [] : buildNpcCategoryMasks(derived.qualifyingLayer);
 }
 
 function reportRollProblem(rolled: Exclude<RopRollOutcome, { status: "rolled" }>): void {
@@ -1051,10 +1059,6 @@ async function runRopProjectionSearch(run: RopSearchRun): Promise<void> {
   const check = checkRopRunCanDeliverSomewhere(run.keep.deliveryRef, run.keep.state.liveCandidatePanel, run.setState);
   if (check.status === "refused") return;
   run.setState((previous) => ({ ...previous, isSearching: true }));
-  // The press session's retained spool holds a whole copy of the cube and a
-  // search is long: dropping it keeps one cube on disk instead of two, at the
-  // cost of re-uploading on the next press.
-  releaseRopSessionSlot(run.sessionRef);
   try {
     await searchAndDeliverBestProjection(run, run.target, request);
   } finally {
@@ -1080,12 +1084,16 @@ function buildRopSearchRunRequestOrNull(
   };
 }
 
+// CT-336: the search runs rop_search in the SAME retained session the press
+// uses, so it costs no interpreter start and no cube read, and the press after
+// a search is as fast as any other.
 async function searchAndDeliverBestProjection(
   run: RopSearchRun,
   target: RopPanelTarget,
   request: RopSearchRunRequest,
 ): Promise<void> {
-  const outcome = await searchBestRopProjectionShowingPanelBusy(request, target.raster, {
+  const holder = takeOrCreateSessionHolderForRaster(run.sessionRef, target.raster, run.derived);
+  const outcome = await holder.searchBestProjectionShowingPanelBusy(request, {
     busyRegistrar: run.busyRegistrar,
     viewportIndex: target.viewportIndex,
     stopController: new AbortController(),

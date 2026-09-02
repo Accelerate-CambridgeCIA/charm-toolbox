@@ -86,9 +86,13 @@ export async function runUserScriptOverCubeInChunks(
 // each execute reuses the retained spool in main, so repeated runs (the ROP
 // panel's presses) never re-upload the source stack. release() drops the spool.
 export interface UserScriptRunSession {
+  // CT-336: builtinModuleName runs a DIFFERENT built-in module against the same
+  // retained cube (ROP's search runs rop_search in the press session); absent
+  // means the module the session was opened with.
   execute(
     params: Record<string, unknown> | undefined,
     callbacks?: ChunkedUserScriptRunCallbacks,
+    builtinModuleName?: ToolboxBuiltinScriptName,
   ): Promise<ToolboxRunUserScriptResult>;
   release(): Promise<void>;
 }
@@ -158,8 +162,8 @@ function buildOpenUserScriptRunSession(
   sourceName: string | null,
 ): UserScriptRunSession {
   return {
-    execute: async (params, callbacks = {}) => {
-      const executed = await executeRunKillingWorkerOnAbort(api, token, callbacks, params);
+    execute: async (params, callbacks = {}, builtinModuleName) => {
+      const executed = await executeRunKillingWorkerOnAbort(api, token, callbacks, params, builtinModuleName);
       throwIfOperationStopped(callbacks.abortSignal);
       return assembleExecutedRunResult(api, token, executed, sourceName);
     },
@@ -255,6 +259,7 @@ async function executeRunKillingWorkerOnAbort(
   token: string,
   callbacks: ChunkedUserScriptRunCallbacks,
   params: Record<string, unknown> | undefined,
+  builtinModuleName: ToolboxBuiltinScriptName | undefined,
 ): Promise<ToolboxUserScriptRunExecuteResult> {
   const abortSignal = callbacks.abortSignal;
   const killWorkerBecauseStopped = (): void => {
@@ -264,11 +269,23 @@ async function executeRunKillingWorkerOnAbort(
   abortSignal?.addEventListener("abort", killWorkerBecauseStopped, { once: true });
   const unsubscribeProgress = subscribeToWorkerProgressForToken(api, token, callbacks.onWorkerProgress);
   try {
-    return await api.executeUserScriptRun({ token, ...(params !== undefined ? { params } : {}) });
+    return await api.executeUserScriptRun(buildExecuteRequest(token, params, builtinModuleName));
   } finally {
     unsubscribeProgress();
     abortSignal?.removeEventListener("abort", killWorkerBecauseStopped);
   }
+}
+
+function buildExecuteRequest(
+  token: string,
+  params: Record<string, unknown> | undefined,
+  builtinModuleName: ToolboxBuiltinScriptName | undefined,
+): ToolboxUserScriptRunExecuteRequest {
+  return {
+    token,
+    ...(params !== undefined ? { params } : {}),
+    ...(builtinModuleName !== undefined ? { builtinModuleName } : {}),
+  };
 }
 
 function subscribeToWorkerProgressForToken(

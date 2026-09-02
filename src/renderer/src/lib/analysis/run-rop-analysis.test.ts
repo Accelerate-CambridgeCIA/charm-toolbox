@@ -5,6 +5,7 @@ import { createMaskLayer, type MaskLayer } from "@/lib/masks/mask-layer";
 import type { UserScriptRunChunkedApi } from "@/lib/python/run-user-script-chunked";
 import type { BusyEntryHandle, BusyEntryRegistrar } from "@/state/busy-state-context";
 
+import type { RopSearchRunRequest } from "./rop-search-request";
 import {
   createRopProjectionSessionHolder,
   scoreRopCandidateShowingPanelBusy,
@@ -36,6 +37,7 @@ interface RecordedSessionRuns {
   beginRequests: ToolboxUserScriptRunBeginRequest[];
   cubeChunkCount: number;
   executeParams: unknown[];
+  executeModuleNames: (string | undefined)[];
   releasedCount: number;
 }
 
@@ -55,6 +57,7 @@ function buildCubeServingApi(
     },
     executeUserScriptRun: (request) => {
       recorded.executeParams.push(request.params);
+      recorded.executeModuleNames.push(request.builtinModuleName);
       return Promise.resolve({
         status: "completed-cube",
         shape: [1, 1, candidateValues.length] as [number, number, number],
@@ -72,7 +75,13 @@ function buildCubeServingApi(
 }
 
 function buildRecordedSessionRuns(): RecordedSessionRuns {
-  return { beginRequests: [], cubeChunkCount: 0, executeParams: [], releasedCount: 0 };
+  return {
+    beginRequests: [],
+    cubeChunkCount: 0,
+    executeParams: [],
+    executeModuleNames: [],
+    releasedCount: 0,
+  };
 }
 
 function rollBindings() {
@@ -84,6 +93,7 @@ describe("createRopProjectionSessionHolder", () => {
     const recorded = buildRecordedSessionRuns();
     const holder = createRopProjectionSessionHolder(
       buildTwoPixelStack(),
+      [],
       buildCubeServingApi([10, 20], recorded),
     );
     const first = await holder.executeProjectionShowingPanelBusy(11, rollBindings());
@@ -106,6 +116,7 @@ describe("createRopProjectionSessionHolder", () => {
     const recorded = buildRecordedSessionRuns();
     const holder = createRopProjectionSessionHolder(
       buildTwoPixelStack(),
+      [],
       buildCubeServingApi([10, 20], recorded),
     );
     await holder.executeProjectionShowingPanelBusy(11, rollBindings());
@@ -119,7 +130,7 @@ describe("createRopProjectionSessionHolder", () => {
     const api = buildCubeServingApi([10, 20], recorded);
     api.executeUserScriptRun = () =>
       Promise.resolve({ status: "failed", message: "boom" });
-    const holder = createRopProjectionSessionHolder(buildTwoPixelStack(), api);
+    const holder = createRopProjectionSessionHolder(buildTwoPixelStack(), [], api);
     const outcome = await holder.executeProjectionShowingPanelBusy(11, rollBindings());
     expect(outcome).toEqual({ status: "failed", message: "boom" });
   });
@@ -128,9 +139,83 @@ describe("createRopProjectionSessionHolder", () => {
     const recorded = buildRecordedSessionRuns();
     const api = buildCubeServingApi([10, 20], recorded);
     api.executeUserScriptRun = () => Promise.resolve({ status: "completed", value: 3 });
-    const holder = createRopProjectionSessionHolder(buildTwoPixelStack(), api);
+    const holder = createRopProjectionSessionHolder(buildTwoPixelStack(), [], api);
     const outcome = await holder.executeProjectionShowingPanelBusy(11, rollBindings());
     expect(outcome.status).toBe("failed");
+  });
+});
+
+function buildSearchRequest(): RopSearchRunRequest {
+  return {
+    seed: 42,
+    projectionCount: 50,
+    objectiveKind: "cnr",
+    maskLayer: buildTwoCategoryLayer(),
+    npcBinCount: 255,
+    cnrTextCategoryValue: 1,
+    cnrBackgroundCategoryValue: 2,
+    customObjectiveSource: null,
+  };
+}
+
+// CT-336: the search runs rop_search in the SAME retained session the press
+// uses, so it uploads the cube once (shared with the press) and names the
+// rop_search module on the execute frame instead of opening a new session.
+describe("createRopProjectionSessionHolder search", () => {
+  it("presses then searches on ONE session, naming rop_search on the search execute", async () => {
+    const recorded = buildRecordedSessionRuns();
+    const masks = [Uint8Array.from([1, 0]), Uint8Array.from([0, 1])];
+    const holder = createRopProjectionSessionHolder(
+      buildTwoPixelStack(),
+      masks,
+      buildCubeServingApi([7, 9], recorded),
+    );
+    await holder.executeProjectionShowingPanelBusy(11, rollBindings());
+    const uploadsAfterPress = recorded.cubeChunkCount;
+    const outcome = await holder.searchBestProjectionShowingPanelBusy(buildSearchRequest(), rollBindings());
+
+    expect(outcome).toEqual({ status: "searched", values: Float32Array.from([7, 9]) });
+    expect(recorded.beginRequests).toHaveLength(1);
+    expect(recorded.beginRequests[0]?.masks).toEqual({ count: 2 });
+    expect(recorded.cubeChunkCount).toBe(uploadsAfterPress);
+    expect(recorded.executeModuleNames).toEqual([undefined, "rop_search"]);
+    expect(recorded.executeParams[1]).toMatchObject({
+      seed: 42,
+      count: 50,
+      objective: "cnr",
+      text_mask_index: 0,
+      background_mask_index: 1,
+    });
+    expect(recorded.releasedCount).toBe(0);
+  });
+
+  it("opens the session with the objective masks when the search runs first", async () => {
+    const recorded = buildRecordedSessionRuns();
+    const masks = [Uint8Array.from([1, 0]), Uint8Array.from([0, 1])];
+    const holder = createRopProjectionSessionHolder(
+      buildTwoPixelStack(),
+      masks,
+      buildCubeServingApi([3, 4], recorded),
+    );
+    const outcome = await holder.searchBestProjectionShowingPanelBusy(buildSearchRequest(), rollBindings());
+
+    expect(outcome.status).toBe("searched");
+    expect(recorded.beginRequests[0]?.source).toEqual({ mode: "builtin", scriptName: "rop" });
+    expect(recorded.beginRequests[0]?.masks).toEqual({ count: 2 });
+    expect(recorded.executeModuleNames).toEqual(["rop_search"]);
+  });
+
+  it("maps a failed search execute onto a failed outcome", async () => {
+    const recorded = buildRecordedSessionRuns();
+    const api = buildCubeServingApi([1, 2], recorded);
+    api.executeUserScriptRun = () =>
+      Promise.resolve({ status: "failed", message: "No projection produced a finite score." });
+    const holder = createRopProjectionSessionHolder(buildTwoPixelStack(), [], api);
+    const outcome = await holder.searchBestProjectionShowingPanelBusy(buildSearchRequest(), rollBindings());
+    expect(outcome).toEqual({
+      status: "failed",
+      message: "No projection produced a finite score.",
+    });
   });
 });
 
