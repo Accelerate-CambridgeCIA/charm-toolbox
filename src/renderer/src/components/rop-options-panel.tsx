@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ROP_PANEL_ICON } from "@/lib/actions/operation-command-bindings";
 import { ROP_KEPT_SUCCESS_MESSAGE, type RopKeepRequest } from "@/lib/actions/rop-keep-action";
 import {
+  canRopRunDeliverSomewhere,
   ROP_PRESS_NEEDS_A_FREE_PANEL_MESSAGE,
   type RopCandidateDeliveryPort,
   type RopLiveCandidatePanel,
@@ -170,6 +171,7 @@ function RopPanelBody(props: RopPanelBodyProps): JSX.Element {
         canSearchNow={controller.canSearchNow}
         isSearching={controller.isSearching}
         onSearch={() => void controller.runProjectionSearch()}
+        deliveryRefusesEveryPanel={controller.deliveryRefusesEveryPanel}
       />
     </>
   );
@@ -427,6 +429,7 @@ interface RopPanelController {
   readonly projectionCountText: string;
   readonly isObjectiveChosen: boolean;
   readonly canSearchNow: boolean;
+  readonly deliveryRefusesEveryPanel: boolean;
   readonly changeProjectionCountText: (text: string) => void;
   readonly runProjectionSearch: () => Promise<void>;
   readonly objectiveKind: RopObjectiveKind;
@@ -521,6 +524,7 @@ interface RopControllerReadouts {
   readonly projectionCountText: string;
   readonly isObjectiveChosen: boolean;
   readonly canSearchNow: boolean;
+  readonly deliveryRefusesEveryPanel: boolean;
   readonly objectiveKind: RopObjectiveKind;
   readonly qualifyingLayer: MaskLayer | null;
   readonly maskObjectivesAvailable: boolean;
@@ -544,8 +548,13 @@ function deriveRopControllerReadouts(
   const objectiveKind = clampObjectiveKindToAvailability(state.objectiveKind, qualifyingLayer);
   const cnrChoice = resolveCnrCategoryChoice(state, qualifyingLayer);
   const canRollNow = canRollNewProjectionNow(state, target, objectiveKind, cnrChoice);
+  const keepReadouts = deriveRopKeepReadouts(state, candidateDelivery);
+  const canDeliverSomewhere = canRopRunDeliverSomewhere(
+    keepReadouts.liveCandidatePanelIndex,
+    candidateDelivery.canOpenFreshCandidatePanel(),
+  );
   return {
-    ...deriveRopKeepReadouts(state, candidateDelivery),
+    ...keepReadouts,
     current: state.current,
     best: state.best,
     isRolling: state.isRolling,
@@ -558,7 +567,12 @@ function deriveRopControllerReadouts(
     customScript: state.customScript,
     canRollNow,
     isObjectiveChosen: objectiveKind !== "none",
+    // CT-330: the delivery pre-check is asked separately (deliveryRefusesEveryPanel)
+    // so the Search button's disabled+tooltip state can explain WHY, and the click
+    // handler still runs its own copy of the same check (checkRopRunCanDeliverSomewhere)
+    // rather than silently no-opping when this flag alone would gate it.
     canSearchNow: canRollNow && objectiveKind !== "none" && hasUsableProjectionCount(state),
+    deliveryRefusesEveryPanel: !canDeliverSomewhere,
     isObjectiveAvailable: (kind) =>
       target !== null && isRopObjectiveKindAvailable(kind, target.masks),
   };
@@ -708,6 +722,29 @@ interface RopPress {
   readonly deliveryRef: RopCandidateDeliveryPortRef;
 }
 
+// CT-330: shared by a press and a search, both of which must refuse BEFORE
+// running rather than discover after a long run that the winner has nowhere
+// to land. Resolves the panel a delivery would replace, or refuses (toasting
+// and dropping the stale live-candidate pointer) when neither replacing nor
+// opening a fresh panel is possible.
+type RopRunDeliveryCheck =
+  | { readonly status: "ok"; readonly replaceAtIndex: number | null }
+  | { readonly status: "refused" };
+
+function checkRopRunCanDeliverSomewhere(
+  deliveryRef: RopCandidateDeliveryPortRef,
+  liveCandidatePanel: RopLiveCandidatePanel | null,
+  setState: RopPanelStateWriter,
+): RopRunDeliveryCheck {
+  const replaceAtIndex = deliveryRef.current.resolveReplaceIndexOrNull(liveCandidatePanel);
+  if (canRopRunDeliverSomewhere(replaceAtIndex, deliveryRef.current.canOpenFreshCandidatePanel())) {
+    return { status: "ok", replaceAtIndex };
+  }
+  notifyError(ROP_PRESS_NEEDS_A_FREE_PANEL_MESSAGE);
+  setState((previous) => ({ ...previous, liveCandidatePanel: null }));
+  return { status: "refused" };
+}
+
 // A press that cannot land anywhere is refused BEFORE the projection runs:
 // with a live candidate panel it replaces that panel, otherwise it needs a
 // free panel or a larger layout.
@@ -716,15 +753,11 @@ async function rollNewRopProjection(
   liveCandidatePanel: RopLiveCandidatePanel | null,
 ): Promise<void> {
   if (press.target === null || !press.derived.canRollNow) return;
-  const replaceAtIndex = press.deliveryRef.current.resolveReplaceIndexOrNull(liveCandidatePanel);
-  if (replaceAtIndex === null && !press.deliveryRef.current.canOpenFreshCandidatePanel()) {
-    notifyError(ROP_PRESS_NEEDS_A_FREE_PANEL_MESSAGE);
-    press.setState((previous) => ({ ...previous, liveCandidatePanel: null }));
-    return;
-  }
+  const check = checkRopRunCanDeliverSomewhere(press.deliveryRef, liveCandidatePanel, press.setState);
+  if (check.status === "refused") return;
   press.setState((previous) => ({ ...previous, isRolling: true }));
   try {
-    await rollScoreAndDeliverOneCandidate(press, press.target, replaceAtIndex);
+    await rollScoreAndDeliverOneCandidate(press, press.target, check.replaceAtIndex);
   } finally {
     press.setState((previous) => ({ ...previous, isRolling: false }));
   }
@@ -934,6 +967,8 @@ interface RopSearchRun {
 async function runRopProjectionSearch(run: RopSearchRun): Promise<void> {
   const request = buildRopSearchRunRequestOrNull(run.target, run.derived);
   if (run.target === null || request === null || !run.derived.canSearchNow) return;
+  const check = checkRopRunCanDeliverSomewhere(run.keep.deliveryRef, run.keep.state.liveCandidatePanel, run.setState);
+  if (check.status === "refused") return;
   run.setState((previous) => ({ ...previous, isSearching: true }));
   // The press session's retained spool holds a whole copy of the cube and a
   // search is long: dropping it keeps one cube on disk instead of two, at the

@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import {
   buildRopCandidateDeliveryPort,
   canOpenFreshRopCandidatePanel,
+  canRopRunDeliverSomewhere,
   deliverRopCandidateToPanel,
   isLiveCandidatePanelIntact,
   resolveRopCandidateReplaceIndexOrNull,
@@ -123,6 +124,21 @@ describe("canOpenFreshRopCandidatePanel", () => {
   it("refuses when every panel is in use and no larger layout exists", () => {
     expect(canOpenFreshRopCandidatePanel(bindingsWith("3x2", 6, [0, 1, 2, 3, 4, 5]))).toBe(false);
     expect(canOpenFreshRopCandidatePanel(bindingsWith("2x3", 6, [0, 1, 2, 3, 4, 5]))).toBe(false);
+  });
+});
+
+describe("canRopRunDeliverSomewhere", () => {
+  it("can deliver by replacing the live candidate panel, whether or not a fresh one could also open", () => {
+    expect(canRopRunDeliverSomewhere(CANDIDATE_INDEX, true)).toBe(true);
+    expect(canRopRunDeliverSomewhere(CANDIDATE_INDEX, false)).toBe(true);
+  });
+
+  it("can deliver by opening a fresh panel when there is no live candidate to replace", () => {
+    expect(canRopRunDeliverSomewhere(null, true)).toBe(true);
+  });
+
+  it("refuses when there is nothing to replace and no fresh panel can open", () => {
+    expect(canRopRunDeliverSomewhere(null, false)).toBe(false);
   });
 });
 

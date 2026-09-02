@@ -67,6 +67,16 @@ export function canOpenFreshRopCandidatePanel(bindings: ApplyActionFlowBindings)
   return canPlaceKeptProjectionInAFreePanel(bindings);
 }
 
+// CT-330: a run (press or search) has somewhere to deliver its winner exactly
+// when it can either replace the live candidate panel or open a fresh one.
+// Shared by both paths so a refusal can never be checked differently.
+export function canRopRunDeliverSomewhere(
+  replaceAtIndex: number | null,
+  canOpenFreshCandidatePanel: boolean,
+): boolean {
+  return replaceAtIndex !== null || canOpenFreshCandidatePanel;
+}
+
 // What the aside needs from App to deliver a press: all three read the LATEST
 // panel map, so the aside must call them at press and delivery time rather
 // than caching their answers.
