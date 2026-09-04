@@ -93,7 +93,10 @@ test("keeps the panel's masks through an in-place value operation", async () => 
   await openOperation(page, INVERT);
   await applyOperationInPlace(page, INVERT);
 
-  await expect(masksOptionsPanel(page)).toBeVisible();
+  // CT-345: opening the operation panel closes the Masks tool, so the aside is
+  // gone by now; reopening it must still find the panel's untouched masks.
+  await expect(masksOptionsPanel(page)).toHaveCount(0);
+  await openMasksOptions(page);
   await expect(maskLayerOptions(page)).toHaveCount(1);
   await expect(maskCategoryNameField(page, FIRST_CATEGORY)).toHaveValue(RENAMED_CATEGORY);
   await expect(masksRemovedToast(page)).toHaveCount(0);

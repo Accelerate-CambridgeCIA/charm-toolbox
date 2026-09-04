@@ -323,6 +323,11 @@ import {
 import { NO_PARAMETER_VALUES, type ParameterValuesById } from "@/lib/actions/parameter-schema";
 import { appendOperationHistoryEntry } from "@/lib/actions/operation-history";
 import { showMaskOverlayWhenOpeningMasksTool, type MaskPanelState } from "@/lib/masks/mask-panel";
+import {
+  closeRightSidePanelsCompetingWith,
+  type RightSidePanelClosers,
+  type RightSidePanelId,
+} from "@/lib/actions/right-side-panels";
 import type { MaskBrushSettings } from "@/lib/masks/mask-brush";
 import { getImageSourceDimensions } from "@/lib/webgl/texture";
 
@@ -545,6 +550,12 @@ function ApplicationShell(): JSX.Element {
     regionRequest,
     renderingApi,
     setActiveAction,
+    closeOtherRightSidePanels: {
+      closeNpcPanel: () => setIsNpcPanelOpen(false),
+      closeCnrPanel: () => setIsCnrPanelOpen(false),
+      closeRopPanel: () => setIsRopPanelOpen(false),
+      closeMasksTool: () => masksTool.setMasksToolActive(false),
+    },
   });
   const handleApplyAction = (options: ToolOptionsApplyOptions) => {
     regionRequest.endRegionRequest();
@@ -554,29 +565,33 @@ function ApplicationShell(): JSX.Element {
     regionTool,
     masksTool: {
       toggleMasksTool: () =>
-        toggleMasksToolShowingActivePanelOverlay(
+        toggleMasksToolClosingCompetingPanels(
           masksTool,
           singleSelectedSource?.index ?? null,
           renderingApi,
+          regionRequestHandlers.rightSidePanelClosers,
         ),
     },
     bandSubsetToggle: deriveBandSubsetToggleStateForToolbar(singleSelectedSource, imagesByIndex, renderingApi),
     openActionPanel: regionRequestHandlers.openActionPanel,
     openNpcPanel: () =>
-      openAnalysisPanelClosingCompetingPanels(regionRequestHandlers, setIsNpcPanelOpen, [
-        setIsCnrPanelOpen,
-        setIsRopPanelOpen,
-      ]),
+      openAnalysisPanelClosingCompetingPanels(
+        "npc",
+        regionRequestHandlers.rightSidePanelClosers,
+        setIsNpcPanelOpen,
+      ),
     openCnrPanel: () =>
-      openAnalysisPanelClosingCompetingPanels(regionRequestHandlers, setIsCnrPanelOpen, [
-        setIsNpcPanelOpen,
-        setIsRopPanelOpen,
-      ]),
-    openRopPanel: () =>
-      openAnalysisPanelClosingCompetingPanels(regionRequestHandlers, setIsRopPanelOpen, [
-        setIsNpcPanelOpen,
+      openAnalysisPanelClosingCompetingPanels(
+        "cnr",
+        regionRequestHandlers.rightSidePanelClosers,
         setIsCnrPanelOpen,
-      ]),
+      ),
+    openRopPanel: () =>
+      openAnalysisPanelClosingCompetingPanels(
+        "rop",
+        regionRequestHandlers.rightSidePanelClosers,
+        setIsRopPanelOpen,
+      ),
     singleSelectedSource,
     applyActionFlowBindings,
   });
@@ -1075,6 +1090,19 @@ function toggleMasksToolShowingActivePanelOverlay(
     if (masks !== previous.masks) writeMaskPanelStateAtViewport(activeViewportIndex, masks, renderingApi);
   }
   masksTool.toggleMasksTool();
+}
+
+// CT-345: turning the Masks tool ON closes every competing right-side panel;
+// turning it OFF closes nothing and never discards mask layers or visibility
+// flags, which live in per-panel rendering state rather than in the tool.
+function toggleMasksToolClosingCompetingPanels(
+  masksTool: MasksToolApi,
+  activeViewportIndex: number | null,
+  renderingApi: ViewportRenderingApi,
+  closers: RightSidePanelClosers,
+): void {
+  if (!masksTool.isMasksToolActive) closeRightSidePanelsCompetingWith("masks", closers);
+  toggleMasksToolShowingActivePanelOverlay(masksTool, activeViewportIndex, renderingApi);
 }
 
 function buildActiveOperationEmbeddedEditorOrNull(
@@ -2163,6 +2191,7 @@ interface ToolPanelRegionRequestHandlerInputs {
   readonly regionRequest: RegionRequestApi;
   readonly renderingApi: ViewportRenderingApi;
   readonly setActiveAction: SetActiveAction;
+  readonly closeOtherRightSidePanels: Omit<RightSidePanelClosers, "closeActionPanel">;
 }
 
 interface ToolPanelRegionRequestHandlers {
@@ -2170,19 +2199,19 @@ interface ToolPanelRegionRequestHandlers {
   readonly closeActionPanel: () => void;
   readonly beginRegionRequest: () => void;
   readonly clearOperationRegion: () => void;
+  readonly rightSidePanelClosers: RightSidePanelClosers;
 }
 
-// CT-308/CT-309: the analysis asides and the tool-options panel compete for
-// the same right-side slot, so opening one from the menu closes any open
-// operation panel (and its pending region request) AND the other analysis
-// aside instead of hiding behind either.
+// CT-308/CT-309/CT-345: the operation panel, the analysis asides and the Masks
+// options aside all compete for the same right-side slot, so opening any one
+// of them closes every other one (and any pending region request) instead of
+// hiding behind it.
 function openAnalysisPanelClosingCompetingPanels(
-  regionRequestHandlers: ToolPanelRegionRequestHandlers,
+  opened: RightSidePanelId,
+  closers: RightSidePanelClosers,
   setThisPanelOpen: (open: boolean) => void,
-  setCompetingPanelsOpen: ReadonlyArray<(open: boolean) => void>,
 ): void {
-  regionRequestHandlers.closeActionPanel();
-  for (const setCompetingPanelOpen of setCompetingPanelsOpen) setCompetingPanelOpen(false);
+  closeRightSidePanelsCompetingWith(opened, closers);
   setThisPanelOpen(true);
 }
 
@@ -2194,6 +2223,16 @@ function buildToolPanelRegionRequestHandlers(
     closeActionPanel: () => closeToolPanelClearingAnyRegionRequest(inputs),
     beginRegionRequest: () => beginOperationRegionRequestForActiveSource(inputs),
     clearOperationRegion: () => clearOperationRegionOnActiveSource(inputs),
+    rightSidePanelClosers: buildRightSidePanelClosers(inputs),
+  };
+}
+
+function buildRightSidePanelClosers(
+  inputs: ToolPanelRegionRequestHandlerInputs,
+): RightSidePanelClosers {
+  return {
+    closeActionPanel: () => closeToolPanelClearingAnyRegionRequest(inputs),
+    ...inputs.closeOtherRightSidePanels,
   };
 }
 
@@ -2201,6 +2240,7 @@ function openToolPanelClearingAnyRegionRequest(
   action: RegisteredViewportAction,
   inputs: ToolPanelRegionRequestHandlerInputs,
 ): void {
+  closeRightSidePanelsCompetingWith("action", buildRightSidePanelClosers(inputs));
   inputs.regionRequest.endRegionRequest();
   clearTransientOperationStateOnActiveSource(inputs);
   inputs.setActiveAction(action);

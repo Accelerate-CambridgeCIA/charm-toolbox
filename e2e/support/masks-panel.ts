@@ -32,6 +32,19 @@ export async function openMasksOptions(page: Page): Promise<Locator> {
   });
 }
 
+// CT-345: opening a competing right-side panel turns the Masks TOOL off, not
+// just the aside, so the toolbar toggle is the oracle for the tool state.
+export function masksToolbarToggleInEitherState(page: Page): Locator {
+  return applicationToolbar(page).getByRole("button", { name: /^Masks( \(active\))?$/ });
+}
+
+export async function expectMasksToolActive(page: Page, isActive: boolean): Promise<void> {
+  await expect(masksToolbarToggleInEitherState(page)).toHaveAttribute(
+    "aria-pressed",
+    String(isActive),
+  );
+}
+
 export async function closeMasksOptions(page: Page): Promise<void> {
   await masksToolbarToggle(page, true).click();
   await expect(masksOptionsPanel(page)).toBeHidden();
