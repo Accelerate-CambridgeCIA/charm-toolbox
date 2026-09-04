@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import { toast } from "sonner";
 
 // CT-260/CT-347: error toasts must not trap the user. CT-260 memory-refusal
 // toasts persist indefinitely (the user must read "close panel X"), while
@@ -15,24 +14,24 @@ export interface ToastVariantOptions {
   readonly duration?: number;
   readonly closeButton?: boolean;
   readonly style?: CSSProperties;
-  readonly action?: { label: string; onClick: (toast: any) => void };
+  readonly action?: { label: string; onClick: () => void };
 }
 
-function buildErrorToastActionWithDismiss(): { label: string; onClick: (toast: any) => void } {
-  return {
-    label: "Dismiss",
-    onClick: (toast: any) => {
-      toast.dismiss(toast.id);
-    },
-  };
-}
+// Sonner calls this action's onClick and then, unless the event was
+// prevented, dismisses THIS toast itself (its action button handler already
+// closes over the toast's own id) - so the action needs no dismiss call of
+// its own. A single shared no-op keeps every call to the builders below
+// referentially equal, which is what lets tests assert on the built options.
+function noOpDismissAction(): void {}
+
+const DISMISS_ERROR_TOAST_ACTION = { label: "Dismiss", onClick: noOpDismissAction };
 
 export function buildPersistentErrorToastOptions(): ToastVariantOptions {
   return {
     duration: Number.POSITIVE_INFINITY,
     closeButton: false,
     style: { pointerEvents: "auto" },
-    action: buildErrorToastActionWithDismiss(),
+    action: DISMISS_ERROR_TOAST_ACTION,
   };
 }
 
@@ -41,7 +40,7 @@ export function buildTransientErrorToastOptions(): ToastVariantOptions {
     duration: 30000,
     closeButton: false,
     style: { pointerEvents: "auto" },
-    action: buildErrorToastActionWithDismiss(),
+    action: DISMISS_ERROR_TOAST_ACTION,
   };
 }
 
