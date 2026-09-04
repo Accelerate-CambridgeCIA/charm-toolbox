@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { RasterImage } from "@/lib/image/raster-image";
+import { listRasterBandOriginalNumbers, type RasterImage } from "@/lib/image/raster-image";
 import { concatenateRasterStacks, widenSampleType } from "./concatenate-stacks";
 
 function buildRaster(options: {
@@ -94,7 +94,7 @@ describe("concatenateRasterStacks", () => {
     expect(result.bandPixels[1]?.[0]).toBe(5000);
   });
 
-  it("carries per-band labels, wavelengths, and original band numbers through from each source where present", () => {
+  it("carries per-band labels and wavelengths through from each source where present, and renumbers sequentially", () => {
     const active = buildRaster({
       width: 2,
       height: 2,
@@ -120,7 +120,33 @@ describe("concatenateRasterStacks", () => {
     const result = concatenateRasterStacks(active, second);
     expect(result.bandLabels).toEqual(["UV", "IR"]);
     expect(result.bandWavelengths).toEqual([365, 850]);
-    expect(result.bandOriginalNumbers).toEqual([1, 1]);
+    expect(result.bandOriginalNumbers).toBeUndefined();
+    expect(listRasterBandOriginalNumbers(result)).toEqual([1, 2]);
+  });
+
+  it("renumbers a 3+3 band concatenation sequentially, ignoring each source's own original numbers", () => {
+    const active = buildRaster({
+      width: 2,
+      height: 2,
+      bandCount: 3,
+      sampleFormat: "uint",
+      bitsPerSample: 16,
+      fillValue: 1,
+      bandOriginalNumbers: [1, 2, 3],
+    });
+    const second = buildRaster({
+      width: 2,
+      height: 2,
+      bandCount: 3,
+      sampleFormat: "uint",
+      bitsPerSample: 16,
+      fillValue: 2,
+      bandOriginalNumbers: [1, 2, 3],
+    });
+    const result = concatenateRasterStacks(active, second);
+    expect(result.bandOriginalNumbers).toBeUndefined();
+    expect(listRasterBandOriginalNumbers(result)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(result.bandLabels).toEqual(["", "", "", "", "", ""]);
   });
 
   it("drops wavelengths entirely when either source lacks them", () => {

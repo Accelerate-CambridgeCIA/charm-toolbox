@@ -2,17 +2,16 @@ import { allocateTypedArrayLikeBandOrThrow } from "@/lib/image/raster-allocation
 import {
   describeRasterBandDisplayIdentity,
   getRasterBandExplicitLabelOrNull,
-  getRasterBandOriginalNumber,
-  listRasterBandOriginalNumbers,
   type RasterImage,
   type RasterTypedArray,
 } from "@/lib/image/raster-image";
 
 // CT-301: append copies of the given bands (by CURRENT band index, in the
 // given order) to the end of the stack. Each copy carries the source band's
-// own pixel data, wavelength, and original band number; its label is the
-// source band's display label plus " copy". Bands NOT duplicated keep their
-// existing identity untouched.
+// own pixel data and wavelength; its label is the source band's display
+// label plus " copy". Bands NOT duplicated keep their existing identity
+// untouched. CT-341: the result renumbers sequentially (bandOriginalNumbers
+// undefined), so appended copies never repeat a source band's number.
 
 export function duplicateRasterBands(
   raster: RasterImage,
@@ -27,7 +26,9 @@ export function duplicateRasterBands(
     ],
     bandLabels: buildBandLabelsWithDuplicates(raster, bandIndexesToDuplicate),
     bandWavelengths: buildBandWavelengthsWithDuplicates(raster, bandIndexesToDuplicate),
-    bandOriginalNumbers: buildBandOriginalNumbersWithDuplicates(raster, bandIndexesToDuplicate),
+    // CT-341: a duplicated stack renumbers sequentially, so an appended copy
+    // never reports its source band's original position.
+    bandOriginalNumbers: undefined,
     bandCount: raster.bandCount + bandIndexesToDuplicate.length,
   };
 }
@@ -75,15 +76,4 @@ function buildBandWavelengthsWithDuplicates(
   if (!raster.bandWavelengths) return undefined;
   const wavelengths = raster.bandWavelengths;
   return [...wavelengths, ...bandIndexesToDuplicate.map((bandIndex) => wavelengths[bandIndex]!)];
-}
-
-function buildBandOriginalNumbersWithDuplicates(
-  raster: RasterImage,
-  bandIndexesToDuplicate: ReadonlyArray<number>,
-): ReadonlyArray<number> {
-  const originalNumbers = listRasterBandOriginalNumbers(raster);
-  const duplicatedOriginalNumbers = bandIndexesToDuplicate.map((bandIndex) =>
-    getRasterBandOriginalNumber(raster, bandIndex),
-  );
-  return [...originalNumbers, ...duplicatedOriginalNumbers];
 }
