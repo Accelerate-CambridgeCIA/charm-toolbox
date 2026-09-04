@@ -43,7 +43,9 @@ import type { ViewportRoi } from "@/lib/image/viewport-roi";
 import { doesMaskLayerCoverDimensions, type MaskLayer } from "@/lib/masks/mask-layer";
 import {
   findSelectedMaskLayerOrNull,
+  panelHasMaskLayers,
   replaceSelectedMaskLayerValues,
+  toggleMaskOverlayVisibility,
 } from "@/lib/masks/mask-panel";
 import type { MaskBrushSettings } from "@/lib/masks/mask-brush";
 import { cn } from "@/lib/utils";
@@ -159,6 +161,9 @@ function renderViewportCellViewport(
       fileName={props.content?.fileName ?? null}
       normalizationEnabled={settings.normalizationEnabled}
       onToggleNormalizedViewing={settings.handleToggleNormalizedViewing}
+      showMaskOverlayToggle={settings.showMaskOverlayToggle}
+      maskOverlayVisible={settings.maskOverlayVisible}
+      onToggleMaskOverlayVisibility={settings.handleToggleMaskOverlayVisibility}
       viewChannelsSeparately={settings.viewChannelsSeparately}
       onToggleViewChannelsSeparately={settings.handleToggleViewChannelsSeparately}
       selectedBandIndex={settings.selectedBandIndex}
@@ -202,6 +207,9 @@ interface ViewportCellInteractionSettings {
   toneCurvePreviewChannelLookupTables: ToneCurveChannelPreviewLuts | null;
   normalizationEnabled: boolean;
   handleToggleNormalizedViewing: () => void;
+  showMaskOverlayToggle: boolean;
+  maskOverlayVisible: boolean;
+  handleToggleMaskOverlayVisibility: () => void;
   viewChannelsSeparately: boolean;
   handleToggleViewChannelsSeparately: () => void;
   selectedBandIndex: number;
@@ -347,6 +355,14 @@ function useViewportCellInteractionSettings(
     (bandIndex: number) => removeBand(cellIndex, bandIndex),
     [cellIndex, removeBand],
   );
+  const handleToggleMaskOverlayVisibility = useCallback(
+    () =>
+      setRenderingState(cellIndex, {
+        ...renderingState,
+        masks: toggleMaskOverlayVisibility(renderingState.masks),
+      }),
+    [cellIndex, renderingState, setRenderingState],
+  );
   const handleCommitMaskStrokeValues = useCallback(
     (values: Uint8Array) =>
       setRenderingState(cellIndex, {
@@ -365,6 +381,9 @@ function useViewportCellInteractionSettings(
     toneCurvePreviewChannelLookupTables: getChannelLookupTablesForViewport(cellIndex),
     normalizationEnabled: renderingState.normalizationEnabled,
     handleToggleNormalizedViewing,
+    showMaskOverlayToggle: panelHasMaskLayers(renderingState.masks),
+    maskOverlayVisible: renderingState.masks.isOverlayVisible,
+    handleToggleMaskOverlayVisibility,
     viewChannelsSeparately: renderingState.viewChannelsSeparately,
     handleToggleViewChannelsSeparately,
     selectedBandIndex: renderingState.selectedBandIndex,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { MutableRefObject, RefObject } from "react";
-import { Contrast, FolderOpen, Link2, X } from "lucide-react";
+import { Contrast, Eye, EyeOff, FolderOpen, Link2, X } from "lucide-react";
 import { notifyError } from "@/lib/notifications/notify";
 
 import { RgbCompositeIcon } from "@/components/rgb-composite-icon";
@@ -94,6 +94,9 @@ interface ViewportProps {
   viewportNumber?: number | null;
   normalizationEnabled: boolean;
   onToggleNormalizedViewing: () => void;
+  showMaskOverlayToggle: boolean;
+  maskOverlayVisible: boolean;
+  onToggleMaskOverlayVisibility: () => void;
   viewChannelsSeparately: boolean;
   onToggleViewChannelsSeparately: () => void;
   selectedBandIndex: number;
@@ -207,6 +210,9 @@ export function Viewport(props: ViewportProps): JSX.Element {
         normalizationEnabled={props.normalizationEnabled}
         onToggleNormalizedViewing={props.onToggleNormalizedViewing}
         showNormalizedViewingToggle={imageSource !== null}
+        showMaskOverlayToggle={props.showMaskOverlayToggle}
+        maskOverlayVisible={props.maskOverlayVisible}
+        onToggleMaskOverlayVisibility={props.onToggleMaskOverlayVisibility}
         showChannelViewToggle={canViewCompositeChannelsSeparately(compositeSource)}
         channelViewEnabled={isChannelViewActive}
         onToggleChannelView={props.onToggleViewChannelsSeparately}
@@ -305,6 +311,9 @@ interface ViewportHeaderStripProps {
   normalizationEnabled: boolean;
   onToggleNormalizedViewing: () => void;
   showNormalizedViewingToggle: boolean;
+  showMaskOverlayToggle: boolean;
+  maskOverlayVisible: boolean;
+  onToggleMaskOverlayVisibility: () => void;
   showChannelViewToggle: boolean;
   channelViewEnabled: boolean;
   onToggleChannelView: () => void;
@@ -334,6 +343,12 @@ function ViewportHeaderStrip(props: ViewportHeaderStripProps): JSX.Element {
         <NormalizedViewingToggleButton
           enabled={props.normalizationEnabled}
           onToggle={props.onToggleNormalizedViewing}
+        />
+      ) : null}
+      {props.showMaskOverlayToggle ? (
+        <MaskOverlayToggleButton
+          enabled={props.maskOverlayVisible}
+          onToggle={props.onToggleMaskOverlayVisibility}
         />
       ) : null}
       {props.showChannelViewToggle ? (
@@ -368,6 +383,35 @@ function NormalizedViewingToggleButton(props: NormalizedViewingToggleButtonProps
           onClick={stopPropagationThenToggle(props.onToggle)}
         >
           <Contrast className="size-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+interface MaskOverlayToggleButtonProps {
+  enabled: boolean;
+  onToggle: () => void;
+}
+
+// CT-343: same shape as NormalizedViewingToggleButton (ghost icon Button,
+// primary tint when on, aria-pressed, tooltip mirroring the label) so a mask
+// can be shown or hidden without opening the Masks tool.
+function MaskOverlayToggleButton(props: MaskOverlayToggleButtonProps): JSX.Element {
+  const label = props.enabled ? "Show masks (on)" : "Show masks";
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("size-6", props.enabled && "bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary")}
+          aria-label={label}
+          aria-pressed={props.enabled}
+          onClick={stopPropagationThenToggle(props.onToggle)}
+        >
+          {props.enabled ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
         </Button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>

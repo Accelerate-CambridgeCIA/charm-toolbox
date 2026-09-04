@@ -93,6 +93,11 @@ export {
   expectNormalizedViewingEnabled,
 } from "./normalized-viewing";
 export {
+  maskOverlayToggle,
+  toggleMaskOverlayVisibility,
+  expectMaskOverlayToggleEnabled,
+} from "./mask-overlay-toggle";
+export {
   goToBandNumberInput,
   goToBandNumberInputInPanel,
   selectActiveBandNumber,
