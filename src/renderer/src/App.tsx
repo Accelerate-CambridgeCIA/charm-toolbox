@@ -185,7 +185,7 @@ import {
   planOpenImagesPlacement,
   type OpenImagesPlacementPlan,
 } from "@/lib/grid/plan-open-images";
-import { notifyError, notifySuccess } from "@/lib/notifications/notify";
+import { notifyError, notifyPersistentError, notifySuccess } from "@/lib/notifications/notify";
 import { coerceViewportSourceToRasterSource } from "@/lib/image/promote-source-to-raster";
 import { shouldRenderRasterAsRgbComposite } from "@/lib/image/raster-color-interpretation";
 import {
@@ -1948,7 +1948,7 @@ function reportDuplicateExceedsMemoryBudget(
   if (!rasterAllocationExceedsMemoryBudget(estimateSourceCloneBytes(sourceContent.source), liveBytes)) {
     return false;
   }
-  notifyError(`Could not duplicate ${sourceContent.fileName}: ${DUPLICATE_MEMORY_REFUSAL_MESSAGE}`);
+  notifyPersistentError(`Could not duplicate ${sourceContent.fileName}: ${DUPLICATE_MEMORY_REFUSAL_MESSAGE}`);
   return true;
 }
 
@@ -2180,7 +2180,13 @@ async function replaceViewportSourceWithReimportedFile(
     );
     notifySuccess(`Re-imported ${file.fileName}`);
   } catch (error) {
-    notifyError(`Could not re-import ${file.fileName}: ${describeUnknownError(error)}`);
+    const message = `Could not re-import ${file.fileName}: ${describeUnknownError(error)}`;
+    const errorText = describeUnknownError(error);
+    if (errorText.includes("not enough memory")) {
+      notifyPersistentError(message);
+    } else {
+      notifyError(message);
+    }
   } finally {
     handle.clear();
   }

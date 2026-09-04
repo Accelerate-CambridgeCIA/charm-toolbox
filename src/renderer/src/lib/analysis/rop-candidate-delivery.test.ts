@@ -7,7 +7,7 @@ import { DEFAULT_VIEWPORT_RENDERING_STATE, type ViewportRenderingState } from "@
 import type { GridLayout } from "@/lib/grid/grid-layout";
 import { makeFloat32RasterFromBands } from "@/lib/image/make-float-raster";
 import type { RasterImage } from "@/lib/image/raster-image";
-import { buildErrorToastOptions } from "@/lib/notifications/toast-options";
+import { buildTransientErrorToastOptions } from "@/lib/notifications/toast-options";
 import { toast } from "sonner";
 
 import {
@@ -183,7 +183,7 @@ describe("deliverRopCandidateToPanel", () => {
     expect(live).toBeNull();
     expect(toast.error).toHaveBeenCalledWith(
       ROP_PRESS_NEEDS_A_FREE_PANEL_MESSAGE,
-      buildErrorToastOptions(),
+      buildTransientErrorToastOptions(),
     );
     expect(bindings.setPendingDuplicate).not.toHaveBeenCalled();
   });

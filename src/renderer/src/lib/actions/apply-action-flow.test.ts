@@ -8,7 +8,7 @@ import {
   EMPTY_PINNED_SPECTRA,
 } from "@/lib/image/spectrum-entry";
 import { reportCompletedUnitAndYieldSoProgressCanPaint } from "@/lib/image/unit-progress";
-import { buildErrorToastOptions } from "@/lib/notifications/toast-options";
+import { buildTransientErrorToastOptions } from "@/lib/notifications/toast-options";
 import {
   queueOutgoingRasterSourceForBufferRelease,
   releaseQueuedRasterBuffersSkippingShared,
@@ -282,7 +282,7 @@ describe("applyActionToDuplicateOfSource with assertCanApplyToSource (CT-190)", 
     expect(harness.bindings.setGridLayout).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(
       "Reject Source failed: not appliable",
-      buildErrorToastOptions(),
+      buildTransientErrorToastOptions(),
     );
   });
 });
@@ -782,7 +782,7 @@ describe("apply without the whole-cube clone (CT-233)", () => {
       harness.bindings,
     );
     await vi.waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Throws failed: boom", buildErrorToastOptions()),
+      expect(toast.error).toHaveBeenCalledWith("Throws failed: boom", buildTransientErrorToastOptions()),
     );
     expect(harness.readContentAtIndex(SOURCE_INDEX)).toBe(content);
     sourceRaster.bandPixels.forEach((band, index) => {
