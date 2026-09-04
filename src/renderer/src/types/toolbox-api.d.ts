@@ -252,6 +252,7 @@ interface ToolboxSaveBundleViewportHeaderEntry {
   colorInterpretation?: "rgb";
   masks?: ReadonlyArray<ToolboxSaveBundleMaskLayerDescriptor>;
   selectedMaskIndex?: number | null;
+  isOverlayVisible?: boolean;
 }
 
 interface ToolboxSaveBundleDraftHeader {

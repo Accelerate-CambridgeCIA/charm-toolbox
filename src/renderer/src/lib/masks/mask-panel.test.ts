@@ -6,11 +6,14 @@ import {
   deleteMaskLayerFromPanel,
   EMPTY_MASK_PANEL_STATE,
   findSelectedMaskLayerOrNull,
+  hideMaskOverlay,
   panelHasMaskLayers,
   renameMaskLayerInPanel,
   replaceMaskLayerInPanel,
   replaceSelectedMaskLayerValues,
   selectMaskLayerInPanel,
+  showMaskOverlay,
+  toggleMaskOverlayVisibility,
   type MaskPanelState,
 } from "./mask-panel";
 import { setMaskLayerOpacityPercent, type MaskLayerContent } from "./mask-layer";
@@ -105,5 +108,34 @@ describe("mask panel layers", () => {
     expect(replaceSelectedMaskLayerValues(EMPTY_MASK_PANEL_STATE, new Uint8Array(4))).toBe(
       EMPTY_MASK_PANEL_STATE,
     );
+  });
+});
+
+// CT-342: the overlay switch is the panel's own state, so it survives every
+// layer edit and is the single thing the rendering gate reads.
+describe("mask overlay visibility", () => {
+  it("starts visible on an empty panel", () => {
+    expect(EMPTY_MASK_PANEL_STATE.isOverlayVisible).toBe(true);
+  });
+
+  it("toggles off and back on without touching the layers", () => {
+    const panel = buildPanelWithLayers(2);
+    const hidden = toggleMaskOverlayVisibility(panel);
+    const shownAgain = toggleMaskOverlayVisibility(hidden);
+    expect([hidden.isOverlayVisible, shownAgain.isOverlayVisible]).toEqual([false, true]);
+    expect(hidden.layers).toBe(panel.layers);
+    expect(hidden.selectedLayerId).toBe(panel.selectedLayerId);
+  });
+
+  it("shows the overlay whatever it was showing before", () => {
+    expect(showMaskOverlay(hideMaskOverlay(EMPTY_MASK_PANEL_STATE)).isOverlayVisible).toBe(true);
+    expect(showMaskOverlay(EMPTY_MASK_PANEL_STATE).isOverlayVisible).toBe(true);
+  });
+
+  it("keeps a hidden overlay hidden across adding and deleting layers", () => {
+    const hidden = hideMaskOverlay(buildPanelWithLayers(2));
+    const added = addNewMaskLayerToPanel(hidden, 4, 3);
+    const deleted = deleteMaskLayerFromPanel(added, "mask-1");
+    expect([added.isOverlayVisible, deleted.isOverlayVisible]).toEqual([false, false]);
   });
 });

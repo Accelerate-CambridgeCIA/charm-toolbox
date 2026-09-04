@@ -1,13 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildMaskPaintingOrNull, type MaskPaintingInputs } from "@/components/viewport-grid";
+import {
+  buildMaskOverlayOrNull,
+  buildMaskPaintingOrNull,
+  type MaskOverlayInputs,
+  type MaskPaintingInputs,
+} from "@/components/viewport-grid";
 import { createMaskLayer } from "@/lib/masks/mask-layer";
 import { DEFAULT_MASK_BRUSH_SETTINGS } from "@/lib/masks/mask-brush";
 import type { ViewportCellContent } from "@/components/viewport-grid";
 
-function buildInputs(overrides: Partial<MaskPaintingInputs> = {}): MaskPaintingInputs {
-  const layer = createMaskLayer("mask-1", "Layer 1", 4, 4);
-  const content: ViewportCellContent = {
+function buildCoveringContent(): ViewportCellContent {
+  return {
     fileName: "fixture.tif",
     source: {
       kind: "raster",
@@ -21,6 +25,20 @@ function buildInputs(overrides: Partial<MaskPaintingInputs> = {}): MaskPaintingI
       },
     },
   };
+}
+
+function buildOverlayInputs(overrides: Partial<MaskOverlayInputs> = {}): MaskOverlayInputs {
+  return {
+    isOverlayVisible: true,
+    layer: createMaskLayer("mask-1", "Layer 1", 4, 4),
+    content: buildCoveringContent(),
+    ...overrides,
+  };
+}
+
+function buildInputs(overrides: Partial<MaskPaintingInputs> = {}): MaskPaintingInputs {
+  const layer = createMaskLayer("mask-1", "Layer 1", 4, 4);
+  const content = buildCoveringContent();
   return {
     isSelected: true,
     isMasksToolActive: true,
@@ -46,5 +64,32 @@ describe("buildMaskPaintingOrNull", () => {
     expect(
       buildMaskPaintingOrNull(buildInputs({ isSelected: true, isMasksToolActive: false })),
     ).toBeNull();
+  });
+});
+
+// CT-342: the overlay answers to the panel's visibility flag alone. An
+// UNSELECTED panel showing a mask is the whole point of the flag, so that is
+// the case asserted first.
+describe("buildMaskOverlayOrNull", () => {
+  it("returns the layer for an unselected panel while the flag is on", () => {
+    const overlay = buildMaskOverlayOrNull(buildOverlayInputs());
+    expect(overlay?.layer.id).toBe("mask-1");
+  });
+
+  it("returns null once the flag is off", () => {
+    expect(buildMaskOverlayOrNull(buildOverlayInputs({ isOverlayVisible: false }))).toBeNull();
+  });
+
+  it("returns null when no layer is selected", () => {
+    expect(buildMaskOverlayOrNull(buildOverlayInputs({ layer: null }))).toBeNull();
+  });
+
+  it("returns null when the selected layer no longer covers the stack", () => {
+    const layer = createMaskLayer("mask-1", "Layer 1", 8, 8);
+    expect(buildMaskOverlayOrNull(buildOverlayInputs({ layer }))).toBeNull();
+  });
+
+  it("returns null for an empty panel", () => {
+    expect(buildMaskOverlayOrNull(buildOverlayInputs({ content: null }))).toBeNull();
   });
 });

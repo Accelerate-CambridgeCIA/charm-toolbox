@@ -7,7 +7,11 @@ import {
   maskMultibandPng,
   multiBandTiff,
 } from "./fixtures/fixture-manifest";
-import { nonClearPixelFraction, summarizeCanvasPixels } from "./support/canvas-pixels";
+import {
+  colorfulNonClearPixelFraction,
+  nonClearPixelFraction,
+  summarizeCanvasPixels,
+} from "./support/canvas-pixels";
 import { readPythonWorkerSpawnCount } from "./support/dialog-stub-controls";
 import { selectGridLayout } from "./support/grid-layout-controls";
 import { closeToolboxApp, launchToolboxApp } from "./support/launch-app";
@@ -73,8 +77,12 @@ import { runAsStoryboardStep } from "./support/storyboard-step";
 //     relative tolerance (plus the readout's four-significant-figure quantum),
 //     and its Metadata reports one band;
 //   - the SOURCE panel is untouched: its readout at (0,0) still reports the
-//     stack's true value and its canvas still renders near-black
-//     (nonClearPixelFraction, the normalized-viewing.spec.ts pattern);
+//     stack's true value and its canvas still shows nothing but the imported
+//     mask's tint over the near-black stack. CT-342 keeps that overlay on
+//     screen once the Masks aside closes, so the near-black check runs BEFORE
+//     the import and the after-press check is colorfulNonClearPixelFraction,
+//     which stays ~1 for "tint over a dark stack" at any panel size and would
+//     collapse if the projection had landed in the source panel;
 //   - the next press REPLACES the candidate panel: the panel count is
 //     unchanged and the readout differs from the first candidate;
 //   - a full grid at its largest layout REFUSES the press before any run;
@@ -99,6 +107,7 @@ const REFERENCE_CNR_SCORE = builtinScriptReferences.ropCnr.value;
 const EXPECTED_SCORE_TEXT = REFERENCE_CNR_SCORE.toPrecision(4);
 const SOURCE_ORIGIN_VALUE = String(multiBandTiff.samplePixels[0]?.valuesPerBand[0]);
 const NEAR_BLACK_FRACTION_CEILING = 0.02;
+const MASK_TINT_COLOURFUL_FRACTION_FLOOR = 0.9;
 const PROJECTIONS_PER_PRESS = 3;
 const CNR_SCORE_NAME = "CNR";
 const FIRST_PROJECTION_BAND_LABEL = "Projection 1";
@@ -145,8 +154,8 @@ test.afterEach(async () => {
 test("delivers each press as a one-band stack next to the source and replaces it on the next press", async () => {
   const page = launched.window;
 
-  await importTheParchmentMask(page);
   await expectSourcePanelRendersNearBlack(page);
+  await importTheParchmentMask(page);
   await assertSourceOriginStillReadsItsTrueValue(page);
 
   await openOperation(page, ROP_PANEL_LABEL);
@@ -454,6 +463,18 @@ async function expectSourcePanelRendersNearBlack(page: Page): Promise<void> {
   });
 }
 
+// Every non-clear pixel of the source panel belongs to the mask overlay (the
+// 12-bit stack itself renders near-black), so the colourful share of them is
+// ~1. A projection delivered into this panel would render as bright grayscale
+// and drag that share far down, whatever the panel's size or letterbox.
+async function expectSourcePanelShowsOnlyTheMaskTint(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "The source panel still shows only the mask tint", async () => {
+    await expect
+      .poll(() => colorfulNonClearPixelFraction(panelCanvas(page, SOURCE_PANEL)))
+      .toBeGreaterThan(MASK_TINT_COLOURFUL_FRACTION_FLOOR);
+  });
+}
+
 async function assertSourceOriginStillReadsItsTrueValue(page: Page): Promise<void> {
   await runAsStoryboardStep(page, "The source readout still reports the true value", async () => {
     const readout = await readPixelValueAt(page, SOURCE_PANEL, 0, 0, IMAGE);
@@ -465,7 +486,7 @@ async function assertSourceOriginStillReadsItsTrueValue(page: Page): Promise<voi
 // it keeps the selection (the delivery passes selectResultPanel: false).
 async function expectSourcePanelUntouchedByThePress(page: Page): Promise<void> {
   await assertSourceOriginStillReadsItsTrueValue(page);
-  await expectSourcePanelRendersNearBlack(page);
+  await expectSourcePanelShowsOnlyTheMaskTint(page);
   await runAsStoryboardStep(page, "The source panel stays selected", async () => {
     await expect(panelCell(page, SOURCE_PANEL)).toHaveAttribute("aria-selected", "true");
     await expect(panelCell(page, CANDIDATE_PANEL)).toHaveAttribute("aria-selected", "false");

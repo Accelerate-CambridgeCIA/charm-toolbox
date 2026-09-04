@@ -69,9 +69,16 @@ import {
   type ViewportPixelReadoutSnapshot,
 } from "@/state/pixel-readout-context";
 
-// CT-304: what the panel needs to paint and show the SELECTED mask layer. It is
-// null whenever the Masks tool is off or no layer is selected, which is exactly
-// when neither the overlay nor the brush should exist.
+// CT-342: the mask layer the panel DRAWS, null whenever the panel's overlay is
+// switched off or no selected layer covers the stack. It is independent of the
+// brush below: a visible overlay does not imply a painting panel.
+export interface ViewportMaskOverlaySelection {
+  readonly layer: MaskLayer;
+}
+
+// CT-304: what the panel needs to PAINT the selected mask layer. It is null
+// whenever the Masks tool is off, the panel is not selected, or no layer is
+// selected, which is exactly when the brush should not exist.
 export interface ViewportMaskPainting {
   readonly layer: MaskLayer;
   readonly brush: MaskBrushSettings;
@@ -100,6 +107,7 @@ interface ViewportProps {
   onPreviewRoiEdit: (roi: ViewportRoi | null) => void;
   onCommitRoiEdit: (roi: ViewportRoi) => void;
   onRegionToolPlainClick: (clickedImagePixel: ClickedImagePixel | null) => void;
+  maskOverlay?: ViewportMaskOverlaySelection | null;
   maskPainting?: ViewportMaskPainting | null;
   onPinPixelSpectrum: (imageX: number, imageY: number) => void;
   onOpenImage: () => void;
@@ -215,7 +223,7 @@ export function Viewport(props: ViewportProps): JSX.Element {
         />
         <ViewportMaskOverlay
           renderer={rendererRef.current}
-          layer={props.maskPainting?.layer ?? null}
+          layer={props.maskOverlay?.layer ?? null}
           values={maskStroke.values}
           transformVersion={transformVersion}
           paintVersion={maskStroke.paintVersion}

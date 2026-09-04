@@ -8,7 +8,11 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { Viewport, type ViewportMaskPainting } from "@/components/viewport";
+import {
+  Viewport,
+  type ViewportMaskOverlaySelection,
+  type ViewportMaskPainting,
+} from "@/components/viewport";
 import {
   getGridLayoutCellCount,
   getGridLayoutTailwindTrackClasses,
@@ -168,6 +172,7 @@ function renderViewportCellViewport(
       onPreviewRoiEdit={settings.handlePreviewRoiEdit}
       onCommitRoiEdit={settings.handleCommitRoiEdit}
       onRegionToolPlainClick={settings.handleRegionToolPlainClick}
+      maskOverlay={settings.maskOverlay}
       maskPainting={settings.maskPainting}
       onPinPixelSpectrum={settings.handlePinPixelSpectrum}
       onOpenImage={props.onOpenImage}
@@ -211,6 +216,7 @@ interface ViewportCellInteractionSettings {
   handleCommitRoiEdit: (roi: ViewportRoi) => void;
   handleRegionToolPlainClick: (clickedImagePixel: ClickedImagePixel | null) => void;
   handlePinPixelSpectrum: (imageX: number, imageY: number) => void;
+  maskOverlay: ViewportMaskOverlaySelection | null;
   maskPainting: ViewportMaskPainting | null;
 }
 
@@ -373,6 +379,11 @@ function useViewportCellInteractionSettings(
     handleCommitRoiEdit,
     handleRegionToolPlainClick,
     handlePinPixelSpectrum,
+    maskOverlay: buildMaskOverlayOrNull({
+      isOverlayVisible: renderingState.masks.isOverlayVisible,
+      layer: findSelectedMaskLayerOrNull(renderingState.masks),
+      content,
+    }),
     maskPainting: buildMaskPaintingOrNull({
       isSelected,
       isMasksToolActive: masksTool.isMasksToolActive,
@@ -384,10 +395,38 @@ function useViewportCellInteractionSettings(
   };
 }
 
+// CT-342: the overlay is drawn whenever the panel's own visibility flag is on,
+// a layer is selected, and that layer still covers the panel's stack. Neither
+// the panel's selection nor the Masks tool takes part: a mask a user chose to
+// see stays on screen while they work in another panel or another tool.
+export interface MaskOverlayInputs {
+  readonly isOverlayVisible: boolean;
+  readonly layer: MaskLayer | null;
+  readonly content: ViewportCellContent | null;
+}
+
+export function buildMaskOverlayOrNull(
+  inputs: MaskOverlayInputs,
+): ViewportMaskOverlaySelection | null {
+  if (!inputs.isOverlayVisible) return null;
+  const layer = findMaskLayerCoveringPanelContentOrNull(inputs.layer, inputs.content);
+  return layer ? { layer } : null;
+}
+
+function findMaskLayerCoveringPanelContentOrNull(
+  layer: MaskLayer | null,
+  content: ViewportCellContent | null,
+): MaskLayer | null {
+  if (!layer || !content) return null;
+  const dimensions = getImageSourceDimensions(content.source);
+  if (!doesMaskLayerCoverDimensions(layer, dimensions.width, dimensions.height)) return null;
+  return layer;
+}
+
 // CT-304: painting exists only while the Masks tool is on, a layer is selected,
-// and that layer still covers the panel's stack - the same three conditions that
-// make the overlay meaningful. CT-331: it also requires the panel to be SELECTED,
-// so opening the Masks tool does not tint every panel that carries a layer.
+// and that layer still covers the panel's stack. CT-331: it also requires the
+// panel to be SELECTED, so opening the Masks tool does not paint into every
+// panel that carries a layer.
 export interface MaskPaintingInputs {
   readonly isSelected: boolean;
   readonly isMasksToolActive: boolean;
@@ -398,13 +437,11 @@ export interface MaskPaintingInputs {
 }
 
 export function buildMaskPaintingOrNull(inputs: MaskPaintingInputs): ViewportMaskPainting | null {
-  if (!inputs.isSelected || !inputs.isMasksToolActive || !inputs.layer || !inputs.content) {
-    return null;
-  }
-  const dimensions = getImageSourceDimensions(inputs.content.source);
-  if (!doesMaskLayerCoverDimensions(inputs.layer, dimensions.width, dimensions.height)) return null;
+  if (!inputs.isSelected || !inputs.isMasksToolActive) return null;
+  const layer = findMaskLayerCoveringPanelContentOrNull(inputs.layer, inputs.content);
+  if (!layer) return null;
   return {
-    layer: inputs.layer,
+    layer,
     brush: inputs.brush,
     onCommitStrokeValues: inputs.onCommitStrokeValues,
   };

@@ -176,6 +176,26 @@ describe("parseProjectFileFromJsonString mask layers", () => {
     expect(project.viewports[0]?.masks[0]?.opacityPercent).toBe(50);
   });
 
+  // CT-342: the overlay switch is optional on read - a bundle written before it
+  // existed reopens showing its masks, the flag's default.
+  it("defaults the mask overlay to visible when the bundle predates the switch", () => {
+    const project = parseProjectFileFromJsonString(
+      buildProjectJsonAtVersion(3, { masks: [buildManifestMaskLayer()], selectedMaskIndex: 0 }),
+    );
+    expect(project.viewports[0]?.isOverlayVisible).toBe(true);
+  });
+
+  it("reads a recorded hidden mask overlay back as hidden", () => {
+    const project = parseProjectFileFromJsonString(
+      buildProjectJsonAtVersion(3, {
+        masks: [buildManifestMaskLayer()],
+        selectedMaskIndex: 0,
+        isOverlayVisible: false,
+      }),
+    );
+    expect(project.viewports[0]?.isOverlayVisible).toBe(false);
+  });
+
   it("rejects a mask layer with no asset path", () => {
     expect(() =>
       parseProjectFileFromJsonString(

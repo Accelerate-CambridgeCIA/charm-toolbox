@@ -47,6 +47,7 @@ export interface DraftBundleViewportEntry {
   readonly colorInterpretation?: RasterColorInterpretation;
   readonly masks: ReadonlyArray<DraftBundleMaskLayer>;
   readonly selectedMaskIndex: number | null;
+  readonly isOverlayVisible: boolean;
 }
 
 export interface DraftBundleFile {
@@ -102,6 +103,7 @@ export async function buildDraftBundleViewportEntryOrThrow(
     colorInterpretation: readPersistableColorInterpretationFromSource(viewport.source),
     masks: await planMaskBundleAssetsForPanel(masks),
     selectedMaskIndex: findSelectedMaskLayerPositionOrNull(masks),
+    isOverlayVisible: masks.isOverlayVisible,
   };
 }
 

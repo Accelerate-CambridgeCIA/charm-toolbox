@@ -134,6 +134,7 @@ function buildPanelSelecting(selectedLayerId: string): MaskPanelState {
   return {
     layers: [buildLayer("mask-1", "Mask 1", 60), buildLayer("mask-2", "Mask 2", 30)],
     selectedLayerId,
+    isOverlayVisible: true,
   };
 }
 

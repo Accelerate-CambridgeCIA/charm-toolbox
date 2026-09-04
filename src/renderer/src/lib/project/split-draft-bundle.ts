@@ -45,6 +45,7 @@ function describeViewportCollectingUploadParts(
     operationHistory: viewport.operationHistory,
     masks: describeMasksCollectingUploadParts(viewport.masks, viewport.index, parts),
     selectedMaskIndex: viewport.selectedMaskIndex,
+    isOverlayVisible: viewport.isOverlayVisible,
     ...(viewport.colorInterpretation === "rgb" ? { colorInterpretation: "rgb" as const } : {}),
   };
 }
