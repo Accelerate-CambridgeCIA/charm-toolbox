@@ -927,8 +927,8 @@ function commitRoiFromLargeDrag(
   source: ViewportImageSource,
   inputs: ViewportRoiDrawInputs,
 ): void {
-  const startImagePixel = renderer.getImagePixelAtCanvasPoint(rect.start.x, rect.start.y);
-  const endImagePixel = renderer.getImagePixelAtCanvasPoint(rect.current.x, rect.current.y);
+  const startImagePixel = renderer.getImagePixelAtCanvasPointClamped(rect.start.x, rect.start.y);
+  const endImagePixel = renderer.getImagePixelAtCanvasPointClamped(rect.current.x, rect.current.y);
   if (!startImagePixel || !endImagePixel) return;
   const candidate = clampViewportRoiToImageBounds(
     {

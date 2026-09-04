@@ -47,6 +47,28 @@ function isUnitPointWithinQuadBounds(unit: ClipPoint): boolean {
   return unit.x >= -1 && unit.x <= 1 && unit.y >= -1 && unit.y <= 1;
 }
 
+export function convertCanvasPixelToImagePixelClamped(
+  inputs: CanvasToImagePixelInputs,
+): ImagePixelPoint | null {
+  if (!hasNonZeroArea(inputs.displaySize)) return null;
+  if (!hasNonZeroArea(inputs.imageSize)) return null;
+  const unit = projectCanvasPointBackToUntransformedQuad(inputs);
+  return convertQuadUnitPointToImagePixel(clampUnitPointToQuadBounds(unit), inputs.imageSize);
+}
+
+function clampUnitPointToQuadBounds(unit: ClipPoint): ClipPoint {
+  return {
+    x: clampToUnitRange(unit.x),
+    y: clampToUnitRange(unit.y),
+  };
+}
+
+function clampToUnitRange(value: number): number {
+  if (value < -1) return -1;
+  if (value > 1) return 1;
+  return value;
+}
+
 function convertQuadUnitPointToImagePixel(
   unit: ClipPoint,
   imageSize: ViewportSize,
