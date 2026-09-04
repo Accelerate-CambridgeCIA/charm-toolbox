@@ -1,12 +1,20 @@
 import { DEFAULT_VIEWPORT_DISPLAY_MAPPING_STATE } from "@/lib/image/as-viewed-display-mapping";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   encodeViewportSourceForSaving,
   planViewportSourceSaveUpload,
 } from "@/lib/image/encode-saved-image";
+import { decodeMaskPngBytes } from "@/lib/masks/mask-png-decode";
 import type { RasterImage } from "@/lib/image/raster-image";
 import type { ViewportImageSource } from "@/lib/webgl/texture";
+
+// CT-339: the canvas encoder needs a DOM, which this vitest environment does
+// not provide; mocking it lets the routing tests assert WHICH path ran
+// without exercising the canvas itself.
+vi.mock("@/lib/image/encode-canvas", () => ({
+  encodeViewportSourceAsCanvasBlobBytes: vi.fn(async () => new Uint8Array([9, 9, 9])),
+}));
 
 // CT-219f: the save encode threads onProgress into the chunked TIFF and ENVI encoders
 // so the app save busy entry renders a determinate percentage bar.
@@ -47,6 +55,48 @@ describe("encodeViewportSourceForSaving progress reporting", () => {
       onProgress: (fraction) => fractions.push(fraction),
     });
     expectMonotonicFractionsEndingAtOne(fractions);
+  });
+});
+
+// CT-339: PNG (8-bit) writes a one-channel grayscale file for a single-band
+// raster and keeps the RGBA canvas path for an rgb-tagged raster.
+describe("encodeViewportSourceForSaving PNG (8-bit) routing", () => {
+  it("routes a single-band uint8 raster through the grayscale encoder", async () => {
+    const raster: RasterImage = {
+      width: 2,
+      height: 1,
+      bandCount: 1,
+      bitsPerSample: 8,
+      sampleFormat: "uint",
+      bandPixels: [new Uint8Array([0, 255])],
+    };
+    const encoded = await encodeViewportSourceForSaving({
+      source: { kind: "raster", raster },
+      selectedBandIndex: 0,
+      formatId: "png-8-bit",
+      displayMapping: DEFAULT_VIEWPORT_DISPLAY_MAPPING_STATE,
+    });
+    const decoded = await decodeMaskPngBytes(encoded.bytes);
+    expect(decoded).toEqual({ width: 2, height: 1, values: Uint8Array.from([0, 255]) });
+  });
+
+  it("routes an rgb-tagged raster through the canvas encoder", async () => {
+    const raster: RasterImage = {
+      width: 1,
+      height: 1,
+      bandCount: 3,
+      bitsPerSample: 8,
+      sampleFormat: "uint",
+      colorInterpretation: "rgb",
+      bandPixels: [new Uint8Array([1]), new Uint8Array([2]), new Uint8Array([3])],
+    };
+    const encoded = await encodeViewportSourceForSaving({
+      source: { kind: "raster", raster },
+      selectedBandIndex: 0,
+      formatId: "png-8-bit",
+      displayMapping: DEFAULT_VIEWPORT_DISPLAY_MAPPING_STATE,
+    });
+    expect(encoded.bytes).toEqual(new Uint8Array([9, 9, 9]));
   });
 });
 

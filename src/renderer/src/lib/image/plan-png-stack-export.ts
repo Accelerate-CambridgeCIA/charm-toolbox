@@ -1,6 +1,6 @@
 import type { ViewportDisplayMappingState } from "@/lib/image/as-viewed-display-mapping";
-import { encodeViewportSourceAsCanvasBlobBytes } from "@/lib/image/encode-canvas";
 import { planRasterBandAsRawPng16SampleUpload } from "@/lib/image/encode-png16-raw-samples";
+import { encodeRasterBandAsGrayscalePng8Bytes } from "@/lib/image/encode-raster-band-as-grayscale-png8";
 import type { SaveImageUploadPartPlan } from "@/lib/image/encode-saved-image";
 import {
   emitBufferInBoundedSlicesInOrder,
@@ -16,8 +16,8 @@ import type { SaveImagePartEncoding } from "@shared/chunked-save-image-protocol"
 // CT-273: plans the PNG stack folder export (one PNG file per band). The
 // 16-bit variant streams each band's RAW big-endian uint16 samples and lets
 // MAIN encode (the CT-271 path per band); the 8-bit variant encodes each band
-// eagerly through the same canvas encoder as the single-band PNG (8-bit)
-// export, so a stack file is byte-identical to saving that band alone.
+// eagerly through the same grayscale encoder as the single-band PNG (8-bit)
+// export (CT-339), so a stack file is byte-identical to saving that band alone.
 
 export interface PngStackFileUploadPlan {
   readonly fileName: string;
@@ -86,7 +86,7 @@ async function planEightBitPngStackFiles(
   fileNames: ReadonlyArray<string>,
   input: PlanPngStackExportInput,
 ): Promise<ReadonlyArray<PngStackFileUploadPlan>> {
-  const encodeBand = input.encodeBandAsPng8Bytes ?? encodeBandThroughCanvasPngEncoder;
+  const encodeBand = input.encodeBandAsPng8Bytes ?? encodeRasterBandAsGrayscalePng8Bytes;
   const files: PngStackFileUploadPlan[] = [];
   for (let bandIndex = 0; bandIndex < fileNames.length; bandIndex += 1) {
     const bytes = await encodeBand(raster, bandIndex, input.displayMapping);
@@ -94,17 +94,6 @@ async function planEightBitPngStackFiles(
     input.onProgress?.((bandIndex + 1) / fileNames.length);
   }
   return files;
-}
-
-async function encodeBandThroughCanvasPngEncoder(
-  raster: RasterImage,
-  bandIndex: number,
-  displayMapping: ViewportDisplayMappingState,
-): Promise<Uint8Array> {
-  return encodeViewportSourceAsCanvasBlobBytes({ kind: "raster", raster }, bandIndex, {
-    mimeType: "image/png",
-    displayMapping,
-  });
 }
 
 function wrapEncodedPngBytesAsPlan(bytes: Uint8Array): SaveImageUploadPartPlan {
