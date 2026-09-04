@@ -43,6 +43,17 @@ export function hideMaskOverlay(panel: MaskPanelState): MaskPanelState {
   return setMaskOverlayVisibility(panel, false);
 }
 
+// CT-344: opening the Masks tool shows the active panel's overlay, so a
+// hidden mask never leaves the tool open on a blank canvas. `wasToolActive` is
+// the tool's state BEFORE the toggle: only a false -> true transition (the
+// tool is about to open) shows it; closing the tool leaves the flag as is.
+export function showMaskOverlayWhenOpeningMasksTool(
+  panel: MaskPanelState,
+  wasToolActive: boolean,
+): MaskPanelState {
+  return wasToolActive ? panel : showMaskOverlay(panel);
+}
+
 const MASK_LAYER_ID_PREFIX = "mask";
 
 export function panelHasMaskLayers(panel: MaskPanelState): boolean {

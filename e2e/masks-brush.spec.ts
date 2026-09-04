@@ -7,6 +7,7 @@ import { colorfulNonClearPixelFraction } from "./support/canvas-pixels";
 import { closeToolboxApp, launchToolboxApp } from "./support/launch-app";
 import type { LaunchedApp } from "./support/launch-app";
 import {
+  closeMasksOptions,
   createMaskLayer,
   createTemporaryExportDirectory,
   enableMaskEraser,
@@ -24,6 +25,7 @@ import {
   selectMaskBrushCategory,
   selectPanel,
   setMaskBrushSizeToOnePixel,
+  toggleMaskOverlayVisibility,
   wheelAtPagePoint,
 } from "./support/page-objects";
 import { runAsStoryboardStep } from "./support/storyboard-step";
@@ -220,6 +222,60 @@ test("shows a ghost of the brush footprint under the cursor before painting", as
   });
 });
 
+// CT-344: painting is claimed by the brush ONLY while the Masks tool is
+// active on a panel whose overlay is visible. Closing the tool or hiding the
+// overlay while it stays open must each turn a centred click into a no-op,
+// even though the overlay itself keeps rendering the painted layer.
+test("stops painting while the Masks tool is closed or the panel's overlay is hidden", async () => {
+  const page = launched.window;
+  const canvas = panelCanvas(page, PANEL);
+
+  await openMasksOptions(page);
+  await createMaskLayer(page);
+  await setMaskBrushSizeToOnePixel(page);
+  await paintMaskStrokeBetweenPixels(page, PANEL, PAINTED_PIXEL, PAINTED_PIXEL, IMAGE);
+  const centrePoint = await panelCanvasCenter(page, PANEL);
+  const exportDirectory = await createTemporaryExportDirectory();
+  const valuesBeforeClosing = (
+    await exportSelectedMaskAndDecodeIndexPng(page, join(exportDirectory, "before-closing.zip"))
+  ).values;
+
+  await runAsStoryboardStep(page, "Closing the Masks tool leaves the overlay on screen", async () => {
+    await closeMasksOptions(page);
+    await expect
+      .poll(() => colorfulNonClearPixelFraction(canvas))
+      .toBeGreaterThan(MINIMUM_TINTED_FRACTION);
+  });
+
+  await runAsStoryboardStep(page, "A centred click with the tool closed paints nothing", async () => {
+    await paintMaskDotAtPagePoint(page, centrePoint);
+    await openMasksOptions(page);
+    await waitForMaskToastsToClear(page);
+    const decoded = await exportSelectedMaskAndDecodeIndexPng(
+      page,
+      join(exportDirectory, "after-closed-tool-click.zip"),
+    );
+    expect(decoded.values).toEqual(valuesBeforeClosing);
+  });
+
+  await runAsStoryboardStep(page, "Hiding the overlay disables the brush ghost", async () => {
+    await toggleMaskOverlayVisibility(page, PANEL);
+    await page.mouse.move(centrePoint.x, centrePoint.y);
+    await expect(page.getByTestId("mask-brush-ghost")).toHaveCount(0);
+  });
+
+  await runAsStoryboardStep(page, "A centred click with the overlay hidden paints nothing", async () => {
+    await paintMaskDotAtPagePoint(page, centrePoint);
+    await toggleMaskOverlayVisibility(page, PANEL);
+    await waitForMaskToastsToClear(page);
+    const decoded = await exportSelectedMaskAndDecodeIndexPng(
+      page,
+      join(exportDirectory, "after-hidden-overlay-click.zip"),
+    );
+    expect(decoded.values).toEqual(valuesBeforeClosing);
+  });
+});
+
 async function pagePointForImagePixelCentre(
   page: Page,
   pixel: { readonly x: number; readonly y: number },
@@ -239,4 +295,13 @@ async function expectExportedMaskValues(
   const exportPath = join(await createTemporaryExportDirectory(), "painted-mask.zip");
   const decoded = await exportSelectedMaskAndDecodeIndexPng(page, exportPath);
   expect(decoded.values).toEqual([...expectedValues]);
+}
+
+// A prior export's transient success toast can still be on screen when a test
+// exports a second time, and its text ("Saved mask to <path>") makes every
+// export toast match the same substring filter - so the next export's own
+// wait for that toast resolves to more than one element. Let the earlier
+// toast clear first.
+async function waitForMaskToastsToClear(page: Page): Promise<void> {
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
 }

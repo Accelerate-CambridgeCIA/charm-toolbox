@@ -13,6 +13,7 @@ import {
   replaceSelectedMaskLayerValues,
   selectMaskLayerInPanel,
   showMaskOverlay,
+  showMaskOverlayWhenOpeningMasksTool,
   toggleMaskOverlayVisibility,
   type MaskPanelState,
 } from "./mask-panel";
@@ -137,5 +138,25 @@ describe("mask overlay visibility", () => {
     const added = addNewMaskLayerToPanel(hidden, 4, 3);
     const deleted = deleteMaskLayerFromPanel(added, "mask-1");
     expect([added.isOverlayVisible, deleted.isOverlayVisible]).toEqual([false, false]);
+  });
+});
+
+// CT-344: opening the Masks tool (a false -> true transition) shows the
+// active panel's overlay, so the tool never opens onto a hidden mask.
+describe("showMaskOverlayWhenOpeningMasksTool", () => {
+  it("shows a hidden overlay when the tool was off (about to open)", () => {
+    const hidden = hideMaskOverlay(buildPanelWithLayers(1));
+    expect(showMaskOverlayWhenOpeningMasksTool(hidden, false).isOverlayVisible).toBe(true);
+  });
+
+  it("leaves a hidden overlay hidden when the tool was already on (about to close)", () => {
+    const hidden = hideMaskOverlay(buildPanelWithLayers(1));
+    expect(showMaskOverlayWhenOpeningMasksTool(hidden, true)).toBe(hidden);
+  });
+
+  it("leaves an already-visible overlay visible either way", () => {
+    const panel = buildPanelWithLayers(1);
+    expect(showMaskOverlayWhenOpeningMasksTool(panel, false).isOverlayVisible).toBe(true);
+    expect(showMaskOverlayWhenOpeningMasksTool(panel, true)).toBe(panel);
   });
 });

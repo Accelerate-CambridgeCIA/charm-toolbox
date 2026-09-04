@@ -42,6 +42,7 @@ function buildInputs(overrides: Partial<MaskPaintingInputs> = {}): MaskPaintingI
   return {
     isSelected: true,
     isMasksToolActive: true,
+    isOverlayVisible: true,
     layer,
     brush: DEFAULT_MASK_BRUSH_SETTINGS,
     content,
@@ -55,7 +56,7 @@ describe("buildMaskPaintingOrNull", () => {
     expect(buildMaskPaintingOrNull(buildInputs({ isSelected: false }))).toBeNull();
   });
 
-  it("returns non-null when the panel is selected, the tool is active, and the layer covers the stack", () => {
+  it("returns non-null when the panel is selected, the tool is active, the overlay is visible, and the layer covers the stack", () => {
     const result = buildMaskPaintingOrNull(buildInputs({ isSelected: true }));
     expect(result).not.toBeNull();
   });
@@ -63,6 +64,12 @@ describe("buildMaskPaintingOrNull", () => {
   it("still returns null when the Masks tool is off, regardless of selection", () => {
     expect(
       buildMaskPaintingOrNull(buildInputs({ isSelected: true, isMasksToolActive: false })),
+    ).toBeNull();
+  });
+
+  it("returns null when the panel's overlay is hidden, even while selected with the tool active", () => {
+    expect(
+      buildMaskPaintingOrNull(buildInputs({ isSelected: true, isOverlayVisible: false })),
     ).toBeNull();
   });
 });

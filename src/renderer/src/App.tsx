@@ -265,7 +265,7 @@ import {
   RegionToolProvider,
   useRegionTool,
 } from "@/state/region-tool-context";
-import { MasksToolProvider, useMasksTool } from "@/state/masks-tool-context";
+import { MasksToolProvider, useMasksTool, type MasksToolApi } from "@/state/masks-tool-context";
 import {
   RegionRequestProvider,
   useRegionRequest,
@@ -322,7 +322,7 @@ import {
 } from "@/lib/actions/viewport-action";
 import { NO_PARAMETER_VALUES, type ParameterValuesById } from "@/lib/actions/parameter-schema";
 import { appendOperationHistoryEntry } from "@/lib/actions/operation-history";
-import type { MaskPanelState } from "@/lib/masks/mask-panel";
+import { showMaskOverlayWhenOpeningMasksTool, type MaskPanelState } from "@/lib/masks/mask-panel";
 import type { MaskBrushSettings } from "@/lib/masks/mask-brush";
 import { getImageSourceDimensions } from "@/lib/webgl/texture";
 
@@ -552,7 +552,14 @@ function ApplicationShell(): JSX.Element {
   };
   const operationCommandHandlers = buildOperationCommandHandlers({
     regionTool,
-    masksTool,
+    masksTool: {
+      toggleMasksTool: () =>
+        toggleMasksToolShowingActivePanelOverlay(
+          masksTool,
+          singleSelectedSource?.index ?? null,
+          renderingApi,
+        ),
+    },
     bandSubsetToggle: deriveBandSubsetToggleStateForToolbar(singleSelectedSource, imagesByIndex, renderingApi),
     openActionPanel: regionRequestHandlers.openActionPanel,
     openNpcPanel: () =>
@@ -1052,6 +1059,22 @@ function writeMaskPanelStateAtViewport(
   if (viewportIndex === null) return;
   const previous = renderingApi.getRenderingState(viewportIndex);
   renderingApi.setRenderingState(viewportIndex, { ...previous, masks });
+}
+
+// CT-344: opening the Masks tool shows the active panel's overlay, so a user
+// who had hidden it never opens the tool onto a blank canvas. Closing the
+// tool leaves every panel's flag exactly as it is.
+function toggleMasksToolShowingActivePanelOverlay(
+  masksTool: MasksToolApi,
+  activeViewportIndex: number | null,
+  renderingApi: ViewportRenderingApi,
+): void {
+  if (activeViewportIndex !== null) {
+    const previous = renderingApi.getRenderingState(activeViewportIndex);
+    const masks = showMaskOverlayWhenOpeningMasksTool(previous.masks, masksTool.isMasksToolActive);
+    if (masks !== previous.masks) writeMaskPanelStateAtViewport(activeViewportIndex, masks, renderingApi);
+  }
+  masksTool.toggleMasksTool();
 }
 
 function buildActiveOperationEmbeddedEditorOrNull(

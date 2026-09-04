@@ -406,6 +406,7 @@ function useViewportCellInteractionSettings(
     maskPainting: buildMaskPaintingOrNull({
       isSelected,
       isMasksToolActive: masksTool.isMasksToolActive,
+      isOverlayVisible: renderingState.masks.isOverlayVisible,
       layer: findSelectedMaskLayerOrNull(renderingState.masks),
       brush: masksTool.brush,
       content,
@@ -445,10 +446,13 @@ function findMaskLayerCoveringPanelContentOrNull(
 // CT-304: painting exists only while the Masks tool is on, a layer is selected,
 // and that layer still covers the panel's stack. CT-331: it also requires the
 // panel to be SELECTED, so opening the Masks tool does not paint into every
-// panel that carries a layer.
+// panel that carries a layer. CT-344: it also requires the panel's OWN overlay
+// switch to be on - hiding the mask on the selected panel disables the brush
+// there too, so showing a mask never draws on it by accident.
 export interface MaskPaintingInputs {
   readonly isSelected: boolean;
   readonly isMasksToolActive: boolean;
+  readonly isOverlayVisible: boolean;
   readonly layer: MaskLayer | null;
   readonly brush: MaskBrushSettings;
   readonly content: ViewportCellContent | null;
@@ -456,7 +460,7 @@ export interface MaskPaintingInputs {
 }
 
 export function buildMaskPaintingOrNull(inputs: MaskPaintingInputs): ViewportMaskPainting | null {
-  if (!inputs.isSelected || !inputs.isMasksToolActive) return null;
+  if (!inputs.isSelected || !inputs.isMasksToolActive || !inputs.isOverlayVisible) return null;
   const layer = findMaskLayerCoveringPanelContentOrNull(inputs.layer, inputs.content);
   if (!layer) return null;
   return {
