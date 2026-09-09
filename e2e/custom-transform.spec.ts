@@ -17,6 +17,7 @@ import {
   expectCustomTransformEditorReady,
   expectCustomTransformPanelClosed,
   expectCustomTransformPanelStillOpen,
+  expectCustomTransformShapeNoteVisible,
   expectHistoryToRecordOperation,
   expectMetadataDataTypeAndDimensions,
   expectPixelReadoutToEqual,
@@ -187,3 +188,15 @@ async function expectResultReadout(expected: number): Promise<void> {
     tolerance: FLOAT_READOUT_TOLERANCE,
   });
 }
+
+// CT-349: Wallace read cube as (height, width, bands) and chased phantom bugs; the panel
+// now states the band-major shape the scripting doc uses.
+test("the panel names the cube shape as (bands, height, width)", async () => {
+  await test.step("open Custom Transform", async () => {
+    await openOperation(launched.window, CUSTOM_TRANSFORM_OPERATION_LABEL);
+    await expectCustomTransformEditorReady(launched.window);
+  });
+  await test.step("the shape note is shown in the panel", async () => {
+    await expectCustomTransformShapeNoteVisible(launched.window);
+  });
+});

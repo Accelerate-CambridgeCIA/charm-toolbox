@@ -462,6 +462,7 @@ export {
   customTransformFailureToast,
   expectCustomTransformConfigured,
   expectCustomTransformEditorReady,
+  expectCustomTransformShapeNoteVisible,
   expectCustomTransformPanelClosed,
   expectCustomTransformPanelStillOpen,
   loadedToolStatusText,

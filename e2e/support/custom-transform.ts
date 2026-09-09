@@ -30,6 +30,16 @@ export async function expectCustomTransformEditorReady(page: Page): Promise<void
   ).toBeVisible();
 }
 
+// CT-349: the panel names the band-major cube shape so a script author does not
+// assume (height, width, bands). Copy is the deliverable, so the DOM text is the oracle.
+export const CUSTOM_TRANSFORM_CUBE_SHAPE_NOTE = "(bands, height, width)";
+
+export async function expectCustomTransformShapeNoteVisible(page: Page): Promise<void> {
+  await expect(
+    customTransformPanel(page).getByText(CUSTOM_TRANSFORM_CUBE_SHAPE_NOTE, { exact: false }),
+  ).toBeVisible();
+}
+
 export async function setCustomTransformFormula(page: Page, expression: string): Promise<void> {
   await customTransformPanel(page)
     .getByLabel("Transform formula", { exact: true })
