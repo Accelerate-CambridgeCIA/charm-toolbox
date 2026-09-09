@@ -43,6 +43,7 @@ import {
   USER_SCRIPT_RUN_PROGRESS_CHANNEL,
   USER_SCRIPT_RUN_RELEASE_CHANNEL,
   USER_SCRIPT_RUN_RESULT_CHUNK_CHANNEL,
+  isBuiltinScriptName,
   type UserScriptRunBeginRequest,
   type UserScriptRunBeginResult,
   type UserScriptRunCubeChunkRequest,
@@ -157,6 +158,7 @@ async function beginSessionForPreparedRun(
       sourceName: run.sourceName,
       interpreterPath: selection.interpreterPath,
       sandbox: !selection.isOwnEnvironmentMode,
+      residentWorker: request.residentWorker === true,
     });
     return { status: "ready", token, sourceName: run.sourceName };
   } catch (error) {
@@ -265,7 +267,7 @@ async function handleExecuteUserScriptRun(
   const token = request.token;
   try {
     const run = sessions.takeExecutableRun(token);
-    const outcome = await runExecutableUserScriptInSubprocess(sessions, event, request, run);
+    const outcome = await runExecutableUserScript(sessions, event, request, run);
     return mapWorkerOutcomeToExecuteResult(sessions, token, run.resultKind, outcome);
   } catch (error) {
     return { status: "failed", message: describeUserScriptFailure(error) };
@@ -273,6 +275,54 @@ async function handleExecuteUserScriptRun(
     sessions.clearExecutingWorkerKill(token);
     sessions.markExecutionSettled(token);
   }
+}
+
+// CT-335: a resident-worker session (only the ROP aside opens one) executes on
+// the retained interpreter; every other run keeps spawning a subprocess per
+// execute. The builtin guard is defensive - only builtin sources open resident
+// sessions today, and an execute frame can only name a builtin module.
+function runExecutableUserScript(
+  sessions: ChunkedUserScriptRunSessionStore,
+  event: Electron.IpcMainInvokeEvent,
+  request: UserScriptRunExecuteRequest,
+  run: ExecutableUserScriptRun,
+): Promise<PythonWorkerOutcome> {
+  if (run.usesResidentWorker && run.input.kind === "builtin") {
+    return executeOnSessionResidentWorker(sessions, event, request, run, run.input);
+  }
+  return runExecutableUserScriptInSubprocess(sessions, event, request, run);
+}
+
+// The store respawns a dead resident worker from the retained spool, and Stop
+// registers the worker's kill exactly like a one-shot run, so the cancel
+// channel works unchanged; the next press then respawns instead of wedging.
+function executeOnSessionResidentWorker(
+  sessions: ChunkedUserScriptRunSessionStore,
+  event: Electron.IpcMainInvokeEvent,
+  request: UserScriptRunExecuteRequest,
+  run: ExecutableUserScriptRun,
+  builtin: { directory: string; moduleName: string },
+): Promise<PythonWorkerOutcome> {
+  const timeoutMs = wallClockTimeoutMsForUserScriptRun(run.resultKind, run.cube.totalByteLength);
+  const worker = sessions.acquireResidentWorkerForExecute(request.token, timeoutMs);
+  sessions.registerExecutingWorkerKill(request.token, () => worker.kill());
+  return worker.execute(
+    sanitizeExecuteParamsOrNull(request.params),
+    { directory: builtin.directory, moduleName: resolveResidentExecuteModuleName(request, builtin.moduleName) },
+    run.resultKind === "cube" ? run.cubeResultSpoolPath : null,
+    { onProgress: (fraction) => sendRunProgressToRenderer(event.sender, request.token, fraction) },
+  );
+}
+
+// CT-336: an execute may name a different built-in module in the session's own
+// directory (ROP's search runs rop_search). Only a known built-in name is
+// honoured, so a bad request can never smuggle an arbitrary module import.
+function resolveResidentExecuteModuleName(
+  request: UserScriptRunExecuteRequest,
+  sessionModuleName: string,
+): string {
+  const override = request.builtinModuleName;
+  return override !== undefined && isBuiltinScriptName(override) ? override : sessionModuleName;
 }
 
 // CT-268: the worker registers its cancel trigger with the session store while

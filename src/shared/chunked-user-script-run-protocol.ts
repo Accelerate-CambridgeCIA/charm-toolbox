@@ -112,6 +112,10 @@ export interface UserScriptRunBeginRequest {
   // CT-307: when present, count * height * width mask bytes are expected on
   // the chunk channel AFTER the cube bytes.
   readonly masks?: UserScriptRunMasksDescriptor;
+  // CT-335: a retained multi-execute session (the ROP aside) asks for a
+  // RESIDENT worker: one interpreter loads the cube once in session mode and
+  // answers every execute. Absent for one-shot runs, which spawn per execute.
+  readonly residentWorker?: boolean;
 }
 
 export type UserScriptRunBeginResult =
@@ -132,6 +136,11 @@ export interface UserScriptRunExecuteRequest {
   // positional argument). A session can execute more than once against its
   // retained spooled cube, each time with fresh params (ROP's press-to-reroll).
   readonly params?: UserScriptRunParams;
+  // CT-336: a resident session may run a DIFFERENT built-in module per execute
+  // (the ROP press runs rop, its search runs rop_search from the same session's
+  // directory). Absent means the session's opening module. Only a known
+  // built-in name is honoured; the directory stays the session's own.
+  readonly builtinModuleName?: BuiltinScriptName;
 }
 
 // A completed cube run answers with the shape only; the band bytes are pulled

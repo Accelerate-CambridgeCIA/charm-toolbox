@@ -10,6 +10,7 @@ import {
 import { closeToolboxApp, launchToolboxApp } from "./support/launch-app";
 import type { LaunchedApp } from "./support/launch-app";
 import {
+  applyOperationInPlace,
   closeMasksOptions,
   computeNpcScores,
   expectScoreWithinRelativeTolerance,
@@ -30,6 +31,10 @@ import {
   setNpcBinCount,
   type NpcTopBandRowReadout,
 } from "./support/page-objects";
+import {
+  CONCATENATE_STACKS_LABEL,
+  chooseLoadedPanelAsSecondStack,
+} from "./support/concatenate-stacks-operation";
 import { runAsStoryboardStep } from "./support/storyboard-step";
 
 // CT-308: the NPC score. The stack is multiband-12bit.tif (4x4x3 uint16) and
@@ -119,6 +124,23 @@ test("plots every band's score, lists the top bands, and records each run in His
 
   await closeNpcOptions(page);
   await expectHistoryRecordsBothRuns(page);
+});
+
+test("lists top-band rows with no repeated label after concatenating a stack with itself", async () => {
+  const page = launched.window;
+
+  await loadFixtureAsStack(page, multiBandTiff.fileName);
+  await selectPanel(page, PANEL);
+  await openOperation(page, CONCATENATE_STACKS_LABEL);
+  await chooseLoadedPanelAsSecondStack(page, `Panel 2 (${multiBandTiff.fileName})`);
+  await applyOperationInPlace(page, CONCATENATE_STACKS_LABEL);
+
+  await importTheParchmentMask(page);
+  await openOperation(page, NPC_PANEL_LABEL);
+  const rows = await computeNpcScores(page);
+
+  const labels = rows.map((row) => row.bandIdentityText);
+  expect(new Set(labels).size).toBe(labels.length);
 });
 
 test("keeps the controls disabled until a mask layer has two painted categories", async () => {

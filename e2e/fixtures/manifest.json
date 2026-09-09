@@ -376,6 +376,44 @@
       }
     ]
   },
+  "enviNirStack": {
+    "headerFileName": "envi-nir-stack.hdr",
+    "binaryFileName": "envi-nir-stack.bin",
+    "width": 4,
+    "height": 4,
+    "bandCount": 3,
+    "dataType": "uint16",
+    "wavelengths": [
+      900,
+      1000,
+      1100
+    ],
+    "bandMeans": [
+      207.5,
+      1007.5,
+      1807.5
+    ],
+    "samplePixels": [
+      {
+        "x": 0,
+        "y": 0,
+        "valuesPerBand": [
+          200,
+          1000,
+          1800
+        ]
+      },
+      {
+        "x": 3,
+        "y": 3,
+        "valuesPerBand": [
+          215,
+          1015,
+          1815
+        ]
+      }
+    ]
+  },
   "enviFloatStack": {
     "headerFileName": "envi-float-stack.hdr",
     "binaryFileName": "envi-float-stack.bin",
@@ -726,6 +764,39 @@
         -1545.7183837890625,
         -1562.4339599609375,
         -1579.1494140625
+      ]
+    },
+    "ropSearchCnr": {
+      "script": "rop_search",
+      "fixture": "multiband-12bit.tif",
+      "maskFixture": "mask-multiband.png",
+      "params": {
+        "seed": 20260822,
+        "count": 50,
+        "objective": "cnr"
+      },
+      "shape": [
+        1,
+        4,
+        4
+      ],
+      "values": [
+        564.0147094726562,
+        562.8876342773438,
+        561.7606201171875,
+        560.633544921875,
+        559.5065307617188,
+        558.3794555664062,
+        557.2523803710938,
+        556.1253662109375,
+        554.998291015625,
+        553.8712768554688,
+        552.7442016601562,
+        551.6171264648438,
+        550.4901123046875,
+        549.363037109375,
+        548.2360229492188,
+        547.1089477539062
       ]
     },
     "l2Minimization": {

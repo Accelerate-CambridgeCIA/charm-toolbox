@@ -16,7 +16,7 @@ function layerWithValues(id: string, values: number[]): MaskLayer {
 }
 
 function panelOf(layers: MaskLayer[], selectedLayerId: string | null = null): MaskPanelState {
-  return { layers, selectedLayerId };
+  return { layers, selectedLayerId, isOverlayVisible: true };
 }
 
 const EMPTY_PANEL = panelOf([]);

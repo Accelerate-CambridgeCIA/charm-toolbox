@@ -38,6 +38,7 @@ function bakedEnviViewport(index: number): DraftBundleViewportEntry {
     operationHistory: [],
     masks: [],
     selectedMaskIndex: null,
+    isOverlayVisible: true,
   };
 }
 
@@ -50,6 +51,7 @@ function bakedTiffViewport(index: number): DraftBundleViewportEntry {
     operationHistory: [],
     masks: [],
     selectedMaskIndex: null,
+    isOverlayVisible: true,
     colorInterpretation: "rgb",
   };
 }
@@ -63,6 +65,7 @@ function externalViewport(index: number): DraftBundleViewportEntry {
     operationHistory: [],
     masks: [],
     selectedMaskIndex: null,
+    isOverlayVisible: true,
   };
 }
 
@@ -162,6 +165,17 @@ describe("splitDraftBundleForChunkedSave", () => {
   it("carries the selected mask position in the header", () => {
     const split = splitDraftBundleForChunkedSave(draftOf([viewportWithTwoMaskLayers(0)]));
     expect(split.header.viewports[0]?.selectedMaskIndex).toBe(1);
+  });
+
+  // CT-342: the header is the only thing that reaches main, so the overlay
+  // switch has to ride along with the mask parts.
+  it("carries the mask overlay visibility in the header", () => {
+    const hidden = { ...viewportWithTwoMaskLayers(0), isOverlayVisible: false };
+    const split = splitDraftBundleForChunkedSave(draftOf([hidden, viewportWithTwoMaskLayers(1)]));
+    expect(split.header.viewports.map((viewport) => viewport.isOverlayVisible)).toEqual([
+      false,
+      true,
+    ]);
   });
 
   it("keeps the exact bytes reachable through the collected part plans", async () => {

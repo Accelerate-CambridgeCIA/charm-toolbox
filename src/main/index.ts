@@ -14,6 +14,7 @@ import {
   isE2eTestModeEnabled,
   registerE2eDialogStubTestChannelsWhenEnabled,
 } from "./e2e-dialog-stub";
+import { registerE2ePythonObservabilityChannelsWhenEnabled } from "./e2e-python-observability";
 import {
   buildMemoryBudgetPreloadArgumentOrNull,
   E2E_MEMORY_BUDGET_ENVIRONMENT_VARIABLE,
@@ -228,6 +229,7 @@ app.whenReady().then(() => {
   registerSaveBundleDialogIpcHandlers();
   registerConfirmCloseIpcHandler();
   registerE2eDialogStubTestChannelsWhenEnabled();
+  registerE2ePythonObservabilityChannelsWhenEnabled();
   const splash = createSplashWindow();
   createMainWindow(splash);
   app.on("activate", reopenWindowOnMacActivate);

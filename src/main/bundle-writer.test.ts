@@ -345,6 +345,27 @@ describe("writeProjectBundleAtPath with mask layers", () => {
     }
   });
 
+  // CT-342: the writer defaults the overlay switch to visible so a draft built
+  // before the flag existed still produces a manifest the reader accepts.
+  it("records the mask overlay visibility, defaulting to visible", async () => {
+    const source = await writeExternalSourceFixture("switch.png", "with-switch");
+    const base = buildExternalAssetViewport(0, "switch.png", source.absolutePath);
+    const draft = buildDraftFromViewports([
+      { ...base, isOverlayVisible: false },
+      { ...buildExternalAssetViewport(1, "switch.png", source.absolutePath) },
+    ]);
+    const bundlePath = join(workspaceDir, "switch.ctbundle");
+    await writeProjectBundleAtPath(bundlePath, draft);
+    const extractedDir = await extractProjectBundleToFreshTempDirectory(bundlePath);
+    try {
+      const manifest = await readManifestFromExtractedBundle(extractedDir);
+      expect(manifest.viewports[0]!.isOverlayVisible).toBe(false);
+      expect(manifest.viewports[1]!.isOverlayVisible).toBe(true);
+    } finally {
+      await rm(extractedDir, { recursive: true, force: true });
+    }
+  });
+
   it("records an empty masks array for a viewport that was never annotated", async () => {
     const source = await writeExternalSourceFixture("plain.png", "no-mask");
     const draft = buildDraftFromViewports([
@@ -368,6 +389,7 @@ interface ExtractedBundleManifest {
   readonly viewports: ReadonlyArray<{
     masks: ReadonlyArray<unknown>;
     selectedMaskIndex: number | null;
+    isOverlayVisible: boolean;
   }>;
 }
 

@@ -7,7 +7,9 @@ import {
   DEFAULT_SPECTRUM_PLOT_PADDING,
   projectXPositionToPixelX,
   projectYValueToPixelY,
+  resolveXTickLabelAnchor,
   type SpectrumPlotDimensions,
+  type SpectrumTickLabelAnchor,
   type SpectrumPlotValueRange,
   type SpectrumPlotXRange,
 } from "@/lib/image/spectrum-plot-geometry";
@@ -341,6 +343,7 @@ function SpectrumPlotXTicks(props: SpectrumPlotXTicksProps): JSX.Element {
           key={index}
           tick={tick}
           label={props.tickLabels[index] ?? ""}
+          anchor={resolveXTickLabelAnchor(index, props.tickPositions.length)}
           dimensions={props.dimensions}
           xRange={props.xRange}
           innerBottom={props.innerBottom}
@@ -353,6 +356,7 @@ function SpectrumPlotXTicks(props: SpectrumPlotXTicksProps): JSX.Element {
 interface SpectrumPlotXTickProps {
   readonly tick: number;
   readonly label: string;
+  readonly anchor: SpectrumTickLabelAnchor;
   readonly dimensions: SpectrumPlotDimensions;
   readonly xRange: SpectrumPlotXRange;
   readonly innerBottom: number;
@@ -373,7 +377,7 @@ function SpectrumPlotXTick(props: SpectrumPlotXTickProps): JSX.Element {
       <text
         x={x}
         y={props.innerBottom + 14}
-        textAnchor="middle"
+        textAnchor={props.anchor}
         fill="currentColor"
         fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
       >

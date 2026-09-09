@@ -99,19 +99,25 @@ export function canDeleteCategoryFromLayer(layer: MaskLayer): boolean {
 }
 
 export function addCategoryToLayer(layer: MaskLayer): MaskLayer {
-  if (!canAddCategoryToLayer(layer)) return layer;
-  return { ...layer, categories: [...layer.categories, buildNextCategoryForLayer(layer)] };
+  return appendNamedCategoryToLayer(layer, pickDefaultMaskCategoryName(layer.categories.length));
 }
 
-function buildNextCategoryForLayer(layer: MaskLayer): MaskCategory {
-  const index = layer.categories.length;
+// CT-332: a category can also be named by the caller (the stem of the file
+// that painted it), so the naming is a parameter and only the colour and the
+// id stay derived from the layer's own list.
+export function appendNamedCategoryToLayer(layer: MaskLayer, name: string): MaskLayer {
+  if (!canAddCategoryToLayer(layer)) return layer;
+  return { ...layer, categories: [...layer.categories, buildNextCategoryForLayer(layer, name)] };
+}
+
+function buildNextCategoryForLayer(layer: MaskLayer, name: string): MaskCategory {
   return {
     id: buildNextPrefixedIdentifier(
       MASK_CATEGORY_ID_PREFIX,
       layer.categories.map((category) => category.id),
     ),
-    name: pickDefaultMaskCategoryName(index),
-    color: pickDefaultMaskCategoryColor(index),
+    name,
+    color: pickDefaultMaskCategoryColor(layer.categories.length),
   };
 }
 

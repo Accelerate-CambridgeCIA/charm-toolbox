@@ -78,6 +78,7 @@ export interface BundleDraftViewportEntry {
   readonly colorInterpretation?: "rgb";
   readonly masks?: ReadonlyArray<BundleDraftMaskAsset>;
   readonly selectedMaskIndex?: number | null;
+  readonly isOverlayVisible?: boolean;
 }
 
 export interface BundleDraft {
@@ -289,6 +290,7 @@ function buildBundleViewportEntryWithRewrittenPath(
     colorInterpretation: viewport.colorInterpretation,
     masks: describeMaskLayersForManifest(viewport.masks ?? [], paths.maskRelativePaths),
     selectedMaskIndex: viewport.selectedMaskIndex ?? null,
+    isOverlayVisible: viewport.isOverlayVisible ?? true,
   };
 }
 

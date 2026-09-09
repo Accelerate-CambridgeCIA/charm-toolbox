@@ -1,8 +1,10 @@
-import { Trash2 } from "lucide-react";
+import { Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { describeElectronInvokeFailure } from "@/lib/ipc/electron-invoke-error";
 import {
   addCategoryToLayer,
   canAddCategoryToLayer,
@@ -15,6 +17,8 @@ import {
   type MaskCategory,
   type MaskLayer,
 } from "@/lib/masks/mask-layer";
+import { addMaskCategoriesFromFilesThroughOpenDialog } from "@/lib/masks/run-mask-import-flow";
+import { notifyError } from "@/lib/notifications/notify";
 
 // CT-302: the selected mask layer's own settings - its name, its labeled
 // categories (max five, each with a free colour), and the overlay opacity.
@@ -75,9 +79,52 @@ function MaskCategoryList(props: MaskCategoryListProps): JSX.Element {
           onChangeLayer={props.onChangeLayer}
         />
       ))}
-      <AddMaskCategoryButton layer={props.layer} onChangeLayer={props.onChangeLayer} />
+      <AddMaskCategoryButtonRow layer={props.layer} onChangeLayer={props.onChangeLayer} />
     </div>
   );
+}
+
+// CT-332: the two ways to add a category sit side by side. The row wraps
+// because "Add category from file" cannot shrink below its label inside the
+// aside's fixed width.
+function AddMaskCategoryButtonRow(props: MaskCategoryListProps): JSX.Element {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <AddMaskCategoryButton {...props} />
+      <AddMaskCategoryFromFileButton {...props} />
+    </div>
+  );
+}
+
+function AddMaskCategoryFromFileButton(props: MaskCategoryListProps): JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="flex-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={!canAddCategoryToLayer(props.layer)}
+            onClick={() => void addCategoriesFromPickedMaskFiles(props)}
+          >
+            <Upload className="size-4" />
+            Add category from file
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>Add each picked PNG as a new category</TooltipContent>
+    </Tooltip>
+  );
+}
+
+async function addCategoriesFromPickedMaskFiles(props: MaskCategoryListProps): Promise<void> {
+  try {
+    const added = await addMaskCategoriesFromFilesThroughOpenDialog(props.layer);
+    if (!added.canceled) props.onChangeLayer(added.layer);
+  } catch (error) {
+    notifyError(describeElectronInvokeFailure(error));
+  }
 }
 
 function AddMaskCategoryButton(props: MaskCategoryListProps): JSX.Element {
@@ -85,6 +132,7 @@ function AddMaskCategoryButton(props: MaskCategoryListProps): JSX.Element {
     <Button
       variant="outline"
       size="sm"
+      className="flex-1"
       disabled={!canAddCategoryToLayer(props.layer)}
       onClick={() => props.onChangeLayer(addCategoryToLayer(props.layer))}
     >

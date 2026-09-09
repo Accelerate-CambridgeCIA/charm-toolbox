@@ -1,7 +1,6 @@
 import { buildRasterMemoryAllocationErrorForByteLength } from "@/lib/image/raster-allocation";
 import {
   getRasterBandExplicitLabelOrNull,
-  listRasterBandOriginalNumbers,
   type RasterImage,
   type RasterSampleFormat,
   type RasterTypedArray,
@@ -29,7 +28,9 @@ export function concatenateRasterStacks(active: RasterImage, second: RasterImage
     bandCount: active.bandCount + second.bandCount,
     bandLabels: buildConcatenatedBandLabels(active, second),
     bandWavelengths: buildConcatenatedBandWavelengths(active, second),
-    bandOriginalNumbers: buildConcatenatedBandOriginalNumbers(active, second),
+    // CT-341: a concatenated stack renumbers sequentially, so bands from
+    // either source never collide on their original position.
+    bandOriginalNumbers: undefined,
   };
 }
 
@@ -142,13 +143,6 @@ function collectExplicitOrEmptyLabels(raster: RasterImage): string[] {
     { length: raster.bandCount },
     (_, index) => getRasterBandExplicitLabelOrNull(raster, index) ?? "",
   );
-}
-
-function buildConcatenatedBandOriginalNumbers(
-  active: RasterImage,
-  second: RasterImage,
-): ReadonlyArray<number> {
-  return [...listRasterBandOriginalNumbers(active), ...listRasterBandOriginalNumbers(second)];
 }
 
 function buildConcatenatedBandWavelengths(

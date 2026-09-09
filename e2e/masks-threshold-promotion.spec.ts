@@ -62,11 +62,12 @@ test("promotes the white pixels of a threshold result into the selected category
   await selectThresholdMethod(page, "Otsu threshold");
   await applyOperation(page, THRESHOLD_OPERATION_LABEL);
 
-  // The Masks tool is still active with the new layer selected, so a plain
-  // centred click on the panel would land on the canvas and paint a brush
-  // stroke instead of just selecting it; click the cell's corner strip like
-  // the multi-select helper does.
+  // CT-345: opening the Threshold panel closed the Masks tool, so reopen the
+  // aside on the source panel; the layer created above is still on it. Select
+  // through the cell's corner strip like the multi-select helper does, so the
+  // click can never land on the canvas as a brush stroke.
   await clickPanelToSelect(page, SOURCE_PANEL);
+  await openMasksOptions(page);
   await promoteFirstQualifyingThresholdResult(page);
 
   const exportPath = join(await createTemporaryExportDirectory(), "promoted-mask.zip");

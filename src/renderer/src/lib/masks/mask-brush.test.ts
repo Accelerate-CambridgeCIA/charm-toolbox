@@ -10,6 +10,7 @@ import {
   maskBrushGhostFootprintDiameterPx,
   MAX_MASK_BRUSH_SIZE_PX,
   MIN_MASK_BRUSH_SIZE_PX,
+  resolveArmedBrushCategoryGroupValue,
   resolveMaskBrushPaintValue,
   writeMaskValueAtPixelIndexes,
 } from "@/lib/masks/mask-brush";
@@ -49,6 +50,16 @@ describe("mask brush settings", () => {
     const settings = { selectedCategoryIndex: 2, isEraserEnabled: false, brushSizePx: 8 };
     expect(resolveMaskBrushPaintValue(settings, 3)).toBe(2);
     expect(resolveMaskBrushPaintValue({ ...settings, isEraserEnabled: true }, 3)).toBe(0);
+  });
+
+  it("shows no category pressed while the eraser is on, so re-clicking it re-arms painting", () => {
+    const settings = { selectedCategoryIndex: 2, isEraserEnabled: true, brushSizePx: 8 };
+    expect(resolveArmedBrushCategoryGroupValue(settings)).toBe("");
+  });
+
+  it("shows the selected category pressed while the eraser is off", () => {
+    const settings = { selectedCategoryIndex: 2, isEraserEnabled: false, brushSizePx: 8 };
+    expect(resolveArmedBrushCategoryGroupValue(settings)).toBe("2");
   });
 });
 

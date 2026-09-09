@@ -15,6 +15,7 @@ import {
   type EnviEncodedFiles,
 } from "@/lib/image/encode-envi";
 import { planRasterBandAsRawPng16SampleUpload } from "@/lib/image/encode-png16-raw-samples";
+import { encodeRasterBandAsGrayscalePng8Bytes } from "@/lib/image/encode-raster-band-as-grayscale-png8";
 import {
   encodeRasterBandAsFloat32TiffBytesReportingProgress,
   encodeRasterBandAsSingleChannelTiffBytesReportingProgress,
@@ -189,7 +190,23 @@ async function dispatchEncodingByFormatKind(
 ): Promise<EncodedSavedImage> {
   if (kind === "tiff") return encodeViewportSourceAsTiff(input, targetBitDepth, targetSampleFormat);
   if (kind === "envi") return encodeViewportSourceAsEnviFiles(input, targetSampleFormat);
+  if (kind === "png") return encodeViewportSourceAsPng(input);
   return encodeViewportSourceAsCanvasBlob(input, kind);
+}
+
+// CT-339: a single-band raster (not a colour photo) writes a one-channel
+// grayscale PNG; a colour photo, an RGB-tagged raster, or a browser-decoded
+// photo source keeps the RGBA canvas path unchanged.
+async function encodeViewportSourceAsPng(input: EncodeSavedImageInput): Promise<EncodedSavedImage> {
+  if (input.source.kind === "raster" && !shouldRenderRasterAsRgbComposite(input.source.raster)) {
+    const bytes = await encodeRasterBandAsGrayscalePng8Bytes(
+      input.source.raster,
+      input.selectedBandIndex,
+      input.displayMapping,
+    );
+    return { bytes };
+  }
+  return encodeViewportSourceAsCanvasBlob(input, "png");
 }
 
 async function encodeViewportSourceAsCanvasBlob(

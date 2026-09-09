@@ -17,7 +17,10 @@ import {
 import { LOCAL_PCA_ACTION_ID } from "@/lib/actions/local-pca-action";
 import { LOCAL_MNF_ACTION_ID } from "@/lib/actions/local-mnf-action";
 import { L2_MINIMIZATION_ACTION_ID } from "@/lib/actions/l2-minimization-action";
-import { ROP_KEEP_ACTION_ID } from "@/lib/actions/rop-keep-action";
+import {
+  ROP_KEEP_ACTION_ID,
+  ROP_PROJECTION_BAND_COUNT_PARAMETER_ID,
+} from "@/lib/actions/rop-keep-action";
 import { resolveComponentCount } from "@/lib/image/dimension-reduction/component-count";
 import { describeFastIcaFitSampling } from "@/lib/image/dimension-reduction/ica";
 import { readRasterReferenceTokenOrEmpty, NO_RASTER_REFERENCE_SELECTED } from "@/lib/actions/parameter-schema";
@@ -114,10 +117,12 @@ function estimateAllocationBytesForRasterApply(
   if (action.id === DUPLICATE_BANDS_ACTION_ID) {
     return estimateDuplicateBandsAllocationBytes(raster, parameterValues);
   }
-  // CT-309: a kept ROP projection is exactly one float band at source
-  // dimensions (the same as the unlisted-action default, pinned explicitly so
-  // a future default change cannot silently reprice it).
-  if (action.id === ROP_KEEP_ACTION_ID) return singleFloatBandBytes(raster);
+  // CT-309: a kept ROP projection is a float band at source dimensions (the
+  // same as the unlisted-action default, pinned explicitly so a future default
+  // change cannot silently reprice it). CT-337: a press can deliver several.
+  if (action.id === ROP_KEEP_ACTION_ID) {
+    return singleFloatBandBytes(raster) * countDeliveredRopProjectionBands(parameterValues);
+  }
   // CT-311/CT-312: the spatially adaptive projections return exactly one float
   // band at source dimensions; the cube itself streams to the Python worker
   // band by band, so no second copy of the stack lives in the renderer.
@@ -129,6 +134,14 @@ function estimateAllocationBytesForRasterApply(
   // reprice it).
   if (action.id === L2_MINIMIZATION_ACTION_ID) return singleFloatBandBytes(raster);
   return singleFloatBandBytes(raster);
+}
+
+// CT-337: the ROP delivery states how many projections it places; a delivery
+// that says nothing is the CT-309 single band.
+function countDeliveredRopProjectionBands(parameterValues: ParameterValuesById): number {
+  const count = parameterValues[ROP_PROJECTION_BAND_COUNT_PARAMETER_ID];
+  if (typeof count !== "number" || !Number.isFinite(count) || count < 1) return 1;
+  return Math.trunc(count);
 }
 
 // CT-301: the output keeps the source's own byte count PLUS one band's worth

@@ -7,6 +7,7 @@ import {
   clampMaskBrushSizePx,
   MAX_MASK_BRUSH_SIZE_PX,
   MIN_MASK_BRUSH_SIZE_PX,
+  resolveArmedBrushCategoryGroupValue,
   type MaskBrushSettings,
 } from "@/lib/masks/mask-brush";
 import type { MaskCategory, MaskLayer } from "@/lib/masks/mask-layer";
@@ -39,7 +40,7 @@ function BrushCategoryChoice(props: MaskBrushControlsProps): JSX.Element {
       variant="outline"
       aria-label="Brush category"
       className="flex-col items-stretch gap-1"
-      value={String(props.brush.selectedCategoryIndex)}
+      value={resolveArmedBrushCategoryGroupValue(props.brush)}
       onValueChange={(next) => selectBrushCategoryWhenChosen(next, props)}
     >
       {props.layer.categories.map((category, position) => (

@@ -4,6 +4,7 @@
 // with a user-facing message; this function never rejects for them.
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { EncodedCubePayload, EncodedMaskPayload } from "./cube-payload";
+import { recordPythonWorkerSpawnWhenE2eEnabled } from "./python-worker-spawn-count";
 import { PYTHON_WORKER_BOOTSTRAP_SOURCE } from "./worker-bootstrap";
 import {
   encodeCubeFrameLengthPrefix,
@@ -83,7 +84,10 @@ function requireCubeSpoolPathForCubeRuns(request: PythonWorkerRunRequest): strin
   return request.cubeResultSpoolPath;
 }
 
-function spawnPythonWorkerProcess(interpreterPath: string): ChildProcessWithoutNullStreams {
+// Exported for the resident session worker (CT-334), which spawns the same
+// bootstrap but keeps stdin open for execute frames.
+export function spawnPythonWorkerProcess(interpreterPath: string): ChildProcessWithoutNullStreams {
+  recordPythonWorkerSpawnWhenE2eEnabled();
   // -I (isolated) ignores PYTHON* environment variables and user site-packages;
   // the full bundled-mode sandbox is CT-208d.
   return spawn(interpreterPath, ["-I", "-X", "utf8", "-c", PYTHON_WORKER_BOOTSTRAP_SOURCE], {
@@ -114,13 +118,30 @@ async function writeRunRequestFramesSequentially(
   request: PythonWorkerRunRequest,
 ): Promise<void> {
   try {
-    await writeToStreamAwaitingFlush(stdin, encodeWorkerRequestFrame(buildWorkerRequest(request)));
-    await writeCubePayloadAsRawFrame(stdin, request.cube);
-    await writeMaskPayloadAsRawFrame(stdin, request.masks ?? null);
+    await writeWorkerRequestAndPayloadFrames(
+      stdin,
+      buildWorkerRequest(request),
+      request.cube,
+      request.masks ?? null,
+    );
     stdin.end();
   } catch {
     stdin.destroy();
   }
+}
+
+// The opening frames shared by both modes: the JSON request, then the raw cube
+// and mask frames. The one-shot caller ends stdin afterwards; the resident
+// session worker (CT-334) keeps it open for execute frames.
+export async function writeWorkerRequestAndPayloadFrames(
+  stdin: ChildProcessWithoutNullStreams["stdin"],
+  request: RunUserScriptRequest,
+  cube: EncodedCubePayload | null,
+  masks: EncodedMaskPayload | null,
+): Promise<void> {
+  await writeToStreamAwaitingFlush(stdin, encodeWorkerRequestFrame(request));
+  await writeCubePayloadAsRawFrame(stdin, cube);
+  await writeMaskPayloadAsRawFrame(stdin, masks);
 }
 
 async function writeCubePayloadAsRawFrame(
@@ -150,7 +171,7 @@ async function writeMaskPayloadAsRawFrame(
 // Resolves regardless of write errors: a dead worker settles the run through
 // the close/error observers, and Node invokes pending write callbacks (with an
 // error) when the stream is destroyed, so this never dangles.
-function writeToStreamAwaitingFlush(
+export function writeToStreamAwaitingFlush(
   stdin: ChildProcessWithoutNullStreams["stdin"],
   bytes: Buffer,
 ): Promise<void> {
@@ -172,7 +193,9 @@ function buildWorkerRequest(request: PythonWorkerRunRequest): RunUserScriptReque
   };
 }
 
-function outcomeFromWorkerResponse(
+// Exported for the resident session worker (CT-334), so a session execute
+// settles with exactly the outcomes a one-shot run would.
+export function outcomeFromWorkerResponse(
   response: Exclude<PythonWorkerResponse, { type: "progress" }>,
   cubeSpoolPath: string | null,
 ): PythonWorkerOutcome {
@@ -191,6 +214,34 @@ function outcomeFromWorkerResponse(
     reason: "script-error",
     userFacingMessage: `The script failed: ${response.message}`,
     detail: response.traceback,
+  };
+}
+
+// The three harness-side failure outcomes, single-sourced so the resident
+// session worker (CT-334) settles executes with the same user-facing text.
+export function buildWorkerTimeoutOutcome(timeoutMs: number): PythonWorkerOutcome {
+  const seconds = Math.round(timeoutMs / 100) / 10;
+  return {
+    kind: "failed",
+    reason: "timeout",
+    userFacingMessage: `The script exceeded the ${seconds}-second limit and was stopped.`,
+  };
+}
+
+export function buildWorkerCanceledOutcome(): PythonWorkerOutcome {
+  return {
+    kind: "failed",
+    reason: "canceled",
+    userFacingMessage: "The script run was stopped.",
+  };
+}
+
+export function buildWorkerCrashedOutcome(detail?: string): PythonWorkerOutcome {
+  return {
+    kind: "failed",
+    reason: "worker-crashed",
+    userFacingMessage: "The script process ended unexpectedly.",
+    detail,
   };
 }
 
@@ -262,32 +313,18 @@ class PythonWorkerRunObserver {
   }
 
   private handleWallClockTimeout(): void {
-    const seconds = Math.round(this.timeoutMs / 100) / 10;
-    this.settle({
-      kind: "failed",
-      reason: "timeout",
-      userFacingMessage: `The script exceeded the ${seconds}-second limit and was stopped.`,
-    });
+    this.settle(buildWorkerTimeoutOutcome(this.timeoutMs));
   }
 
   // CT-268: a user Stop settles the run and SIGKILLs the subprocess (settle's
   // killWorkerIfStillRunning). The message is rarely user-visible - the
   // renderer converts a stopped run into its own "Operation stopped" toast.
   cancelBecauseUserStopped(): void {
-    this.settle({
-      kind: "failed",
-      reason: "canceled",
-      userFacingMessage: "The script run was stopped.",
-    });
+    this.settle(buildWorkerCanceledOutcome());
   }
 
   private settleAsCrashed(detail?: string): void {
-    this.settle({
-      kind: "failed",
-      reason: "worker-crashed",
-      userFacingMessage: "The script process ended unexpectedly.",
-      detail,
-    });
+    this.settle(buildWorkerCrashedOutcome(detail));
   }
 
   private settle(outcome: PythonWorkerOutcome): void {

@@ -289,6 +289,7 @@ function buildWriterViewportEntry(
     operationHistory: viewport.operationHistory,
     masks: buildWriterMaskAssets(session, viewport),
     selectedMaskIndex: viewport.selectedMaskIndex ?? null,
+    isOverlayVisible: viewport.isOverlayVisible ?? true,
     ...(viewport.colorInterpretation ? { colorInterpretation: viewport.colorInterpretation } : {}),
   };
 }

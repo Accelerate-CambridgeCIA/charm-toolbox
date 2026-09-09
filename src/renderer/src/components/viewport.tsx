@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { MutableRefObject, RefObject } from "react";
-import { Contrast, FolderOpen, Link2, X } from "lucide-react";
+import { Contrast, Eye, EyeOff, FolderOpen, Link2, X } from "lucide-react";
 import { notifyError } from "@/lib/notifications/notify";
 
 import { RgbCompositeIcon } from "@/components/rgb-composite-icon";
@@ -69,9 +69,16 @@ import {
   type ViewportPixelReadoutSnapshot,
 } from "@/state/pixel-readout-context";
 
-// CT-304: what the panel needs to paint and show the SELECTED mask layer. It is
-// null whenever the Masks tool is off or no layer is selected, which is exactly
-// when neither the overlay nor the brush should exist.
+// CT-342: the mask layer the panel DRAWS, null whenever the panel's overlay is
+// switched off or no selected layer covers the stack. It is independent of the
+// brush below: a visible overlay does not imply a painting panel.
+export interface ViewportMaskOverlaySelection {
+  readonly layer: MaskLayer;
+}
+
+// CT-304: what the panel needs to PAINT the selected mask layer. It is null
+// whenever the Masks tool is off, the panel is not selected, or no layer is
+// selected, which is exactly when the brush should not exist.
 export interface ViewportMaskPainting {
   readonly layer: MaskLayer;
   readonly brush: MaskBrushSettings;
@@ -87,6 +94,9 @@ interface ViewportProps {
   viewportNumber?: number | null;
   normalizationEnabled: boolean;
   onToggleNormalizedViewing: () => void;
+  showMaskOverlayToggle: boolean;
+  maskOverlayVisible: boolean;
+  onToggleMaskOverlayVisibility: () => void;
   viewChannelsSeparately: boolean;
   onToggleViewChannelsSeparately: () => void;
   selectedBandIndex: number;
@@ -100,6 +110,7 @@ interface ViewportProps {
   onPreviewRoiEdit: (roi: ViewportRoi | null) => void;
   onCommitRoiEdit: (roi: ViewportRoi) => void;
   onRegionToolPlainClick: (clickedImagePixel: ClickedImagePixel | null) => void;
+  maskOverlay?: ViewportMaskOverlaySelection | null;
   maskPainting?: ViewportMaskPainting | null;
   onPinPixelSpectrum: (imageX: number, imageY: number) => void;
   onOpenImage: () => void;
@@ -199,6 +210,9 @@ export function Viewport(props: ViewportProps): JSX.Element {
         normalizationEnabled={props.normalizationEnabled}
         onToggleNormalizedViewing={props.onToggleNormalizedViewing}
         showNormalizedViewingToggle={imageSource !== null}
+        showMaskOverlayToggle={props.showMaskOverlayToggle}
+        maskOverlayVisible={props.maskOverlayVisible}
+        onToggleMaskOverlayVisibility={props.onToggleMaskOverlayVisibility}
         showChannelViewToggle={canViewCompositeChannelsSeparately(compositeSource)}
         channelViewEnabled={isChannelViewActive}
         onToggleChannelView={props.onToggleViewChannelsSeparately}
@@ -215,7 +229,7 @@ export function Viewport(props: ViewportProps): JSX.Element {
         />
         <ViewportMaskOverlay
           renderer={rendererRef.current}
-          layer={props.maskPainting?.layer ?? null}
+          layer={props.maskOverlay?.layer ?? null}
           values={maskStroke.values}
           transformVersion={transformVersion}
           paintVersion={maskStroke.paintVersion}
@@ -297,6 +311,9 @@ interface ViewportHeaderStripProps {
   normalizationEnabled: boolean;
   onToggleNormalizedViewing: () => void;
   showNormalizedViewingToggle: boolean;
+  showMaskOverlayToggle: boolean;
+  maskOverlayVisible: boolean;
+  onToggleMaskOverlayVisibility: () => void;
   showChannelViewToggle: boolean;
   channelViewEnabled: boolean;
   onToggleChannelView: () => void;
@@ -326,6 +343,12 @@ function ViewportHeaderStrip(props: ViewportHeaderStripProps): JSX.Element {
         <NormalizedViewingToggleButton
           enabled={props.normalizationEnabled}
           onToggle={props.onToggleNormalizedViewing}
+        />
+      ) : null}
+      {props.showMaskOverlayToggle ? (
+        <MaskOverlayToggleButton
+          enabled={props.maskOverlayVisible}
+          onToggle={props.onToggleMaskOverlayVisibility}
         />
       ) : null}
       {props.showChannelViewToggle ? (
@@ -360,6 +383,35 @@ function NormalizedViewingToggleButton(props: NormalizedViewingToggleButtonProps
           onClick={stopPropagationThenToggle(props.onToggle)}
         >
           <Contrast className="size-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+interface MaskOverlayToggleButtonProps {
+  enabled: boolean;
+  onToggle: () => void;
+}
+
+// CT-343: same shape as NormalizedViewingToggleButton (ghost icon Button,
+// primary tint when on, aria-pressed, tooltip mirroring the label) so a mask
+// can be shown or hidden without opening the Masks tool.
+function MaskOverlayToggleButton(props: MaskOverlayToggleButtonProps): JSX.Element {
+  const label = props.enabled ? "Show masks (on)" : "Show masks";
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("size-6", props.enabled && "bg-primary/15 text-primary hover:bg-primary/20 hover:text-primary")}
+          aria-label={label}
+          aria-pressed={props.enabled}
+          onClick={stopPropagationThenToggle(props.onToggle)}
+        >
+          {props.enabled ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
         </Button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
@@ -875,8 +927,8 @@ function commitRoiFromLargeDrag(
   source: ViewportImageSource,
   inputs: ViewportRoiDrawInputs,
 ): void {
-  const startImagePixel = renderer.getImagePixelAtCanvasPoint(rect.start.x, rect.start.y);
-  const endImagePixel = renderer.getImagePixelAtCanvasPoint(rect.current.x, rect.current.y);
+  const startImagePixel = renderer.getImagePixelAtCanvasPointClamped(rect.start.x, rect.start.y);
+  const endImagePixel = renderer.getImagePixelAtCanvasPointClamped(rect.current.x, rect.current.y);
   if (!startImagePixel || !endImagePixel) return;
   const candidate = clampViewportRoiToImageBounds(
     {

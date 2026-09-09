@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { RasterImage } from "@/lib/image/raster-image";
 import type { MaskLayer } from "@/lib/masks/mask-layer";
-import type { MaskPanelState } from "@/lib/masks/mask-panel";
+import { hideMaskOverlay, type MaskPanelState } from "@/lib/masks/mask-panel";
 import { decodeMaskPngBytes } from "@/lib/masks/mask-png-decode";
 import type { ViewportImageSource } from "@/lib/webgl/texture";
 
@@ -147,6 +147,15 @@ describe("buildDraftBundleFromSnapshot", () => {
     expect(draft.viewports[0]?.selectedMaskIndex).toBe(1);
   });
 
+  // CT-342: the panel's overlay switch is part of what a project remembers, so
+  // a mask the user hid stays hidden when the bundle is reopened.
+  it("records the panel's mask overlay visibility", async () => {
+    const visible = await buildDraftBundleFromSnapshot(withTwoMaskLayersSelectingTheSecond());
+    expect(visible.viewports[0]?.isOverlayVisible).toBe(true);
+    const hidden = await buildDraftBundleFromSnapshot(withTheMaskOverlayHidden());
+    expect(hidden.viewports[0]?.isOverlayVisible).toBe(false);
+  });
+
   it("plans mask asset bytes that decode back to the painted category indexes", async () => {
     const draft = await buildDraftBundleFromSnapshot(withTwoMaskLayersSelectingTheSecond());
     const plan = draft.viewports[0]!.masks[0]!.plan;
@@ -164,6 +173,12 @@ function withTwoMaskLayersSelectingTheSecond(): SaveableProjectSnapshot {
   };
 }
 
+function withTheMaskOverlayHidden(): SaveableProjectSnapshot {
+  const base = buildSingleViewportSnapshot();
+  const masks = hideMaskOverlay(buildTwoMaskLayerPanel());
+  return { ...base, viewports: [{ ...base.viewports[0]!, masks }] };
+}
+
 function buildTwoMaskLayerPanel(): MaskPanelState {
   return {
     layers: [
@@ -171,6 +186,7 @@ function buildTwoMaskLayerPanel(): MaskPanelState {
       buildMaskLayerFixture("mask-2", "Mask 2", Uint8Array.from([2, 2, 0, 0]), 30),
     ],
     selectedLayerId: "mask-2",
+    isOverlayVisible: true,
   };
 }
 

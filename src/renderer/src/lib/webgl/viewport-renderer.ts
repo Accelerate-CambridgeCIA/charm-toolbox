@@ -49,9 +49,11 @@ import {
   type ViewportSize,
 } from "./view-transform";
 import {
+  convertCanvasPixelToImagePixelClamped,
   convertCanvasPixelToImagePixelOrNull,
   convertImagePixelToCanvasPointOrNull,
   type CanvasPixelPoint,
+  type CanvasToImagePixelInputs,
   type ImagePixelPoint,
 } from "./canvas-to-image-pixel";
 import {
@@ -331,14 +333,23 @@ export class ViewportRenderer {
 
   getImagePixelAtCanvasPoint(xPx: number, yPx: number): ImagePixelPoint | null {
     if (!this.currentSource) return null;
-    return convertCanvasPixelToImagePixelOrNull({
+    return convertCanvasPixelToImagePixelOrNull(this.buildCanvasToImagePixelInputs(xPx, yPx));
+  }
+
+  getImagePixelAtCanvasPointClamped(xPx: number, yPx: number): ImagePixelPoint | null {
+    if (!this.currentSource) return null;
+    return convertCanvasPixelToImagePixelClamped(this.buildCanvasToImagePixelInputs(xPx, yPx));
+  }
+
+  private buildCanvasToImagePixelInputs(xPx: number, yPx: number): CanvasToImagePixelInputs {
+    return {
       canvasPointPx: { x: xPx, y: yPx },
       displaySize: this.displaySize,
       imageSize: this.imageSize,
       fitScale: computeFitToViewportScale(this.imageSize, this.displaySize),
       userZoom: this.userZoom,
       userPan: this.userPan,
-    });
+    };
   }
 
   getCanvasPointForImagePixel(imageX: number, imageY: number): CanvasPixelPoint | null {

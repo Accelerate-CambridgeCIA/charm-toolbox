@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   hasPinnedRopPanelLostItsRaster,
+  repinRopToSelection,
   resolveNextRopPin,
   type RopPinnedPanel,
   type RopPinPanelsByIndex,
@@ -86,5 +87,40 @@ describe("hasPinnedRopPanelLostItsRaster", () => {
   it("reports the loss when the pinned panel was closed", () => {
     const pinned: RopPinnedPanel = { ...PANEL_ONE, raster: makeRaster(1) };
     expect(hasPinnedRopPanelLostItsRaster(pinned, new Map())).toBe(true);
+  });
+});
+
+describe("repinRopToSelection", () => {
+  it("re-pins to another selected raster panel", () => {
+    const replacement = makeRaster(2);
+    const pinned: RopPinnedPanel = { ...PANEL_ONE, raster: makeRaster(1) };
+    const panels = panelsHoldingRasters([
+      [0, pinned.raster],
+      [1, replacement],
+    ]);
+    expect(repinRopToSelection(pinned, PANEL_TWO, panels)).toEqual({
+      ...PANEL_TWO,
+      raster: replacement,
+    });
+  });
+
+  it("refuses to re-pin to a selected panel that holds a photo", () => {
+    const pinned: RopPinnedPanel = { ...PANEL_ONE, raster: makeRaster(1) };
+    const panels: RopPinPanelsByIndex = new Map([
+      [0, { source: { kind: "raster", raster: pinned.raster } }],
+      [1, { source: { kind: "pixels", pixels: new Uint8Array(4), width: 1, height: 1 } }],
+    ]);
+    expect(repinRopToSelection(pinned, PANEL_TWO, panels)).toBeNull();
+  });
+
+  it("returns the previous pin, object identity included, when the pinned panel is selected", () => {
+    const pinned: RopPinnedPanel = { ...PANEL_ONE, raster: makeRaster(1) };
+    const panels = panelsHoldingRasters([[0, makeRaster(9)]]);
+    expect(repinRopToSelection(pinned, PANEL_ONE, panels)).toBe(pinned);
+  });
+
+  it("re-pins to nothing while no single panel is selected", () => {
+    const pinned: RopPinnedPanel = { ...PANEL_ONE, raster: makeRaster(1) };
+    expect(repinRopToSelection(pinned, null, panelsHoldingRasters([[0, pinned.raster]]))).toBeNull();
   });
 });

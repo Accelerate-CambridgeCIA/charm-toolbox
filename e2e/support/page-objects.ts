@@ -7,6 +7,7 @@ export {
   panelGrid,
   panelCell,
   panelCanvas,
+  viewportMaskOverlay,
   selectPanel,
   countSelectedPanels,
   countPanels,
@@ -26,6 +27,7 @@ export {
   setOpenInNewPanel,
   openInNewPanelSwitch,
   setOperationNumberParameter,
+  typeOperationNumberParameter,
   setOperationEnumParameter,
   cancelOperation,
   isApplyEnabled,
@@ -91,6 +93,11 @@ export {
   toggleNormalizedViewing,
   expectNormalizedViewingEnabled,
 } from "./normalized-viewing";
+export {
+  maskOverlayToggle,
+  toggleMaskOverlayVisibility,
+  expectMaskOverlayToggleEnabled,
+} from "./mask-overlay-toggle";
 export {
   goToBandNumberInput,
   goToBandNumberInputInPanel,
@@ -456,6 +463,7 @@ export {
   customTransformFailureToast,
   expectCustomTransformConfigured,
   expectCustomTransformEditorReady,
+  expectCustomTransformShapeNoteVisible,
   expectCustomTransformPanelClosed,
   expectCustomTransformPanelStillOpen,
   loadedToolStatusText,
@@ -466,6 +474,7 @@ export {
   addMaskCategoryButton,
   closeMasksOptions,
   createMaskLayer,
+  expectMasksToolActive,
   maskCategoryColorField,
   maskCategoryNameField,
   maskCategoryNameFields,
@@ -474,6 +483,7 @@ export {
   maskLayerOptions,
   masksOptionsPanel,
   masksRemovedToast,
+  masksToolbarToggleInEitherState,
   MASKS_REMOVED_TOAST_TEXT,
   MASKS_TOOL_LABEL,
   MAX_MASK_CATEGORIES,
@@ -491,6 +501,8 @@ export {
   setMaskBrushSizeToOnePixel,
 } from "./mask-brush";
 export {
+  addMaskCategoriesFromPaths,
+  addMaskCategoryFromFileButton,
   decodeIndexPngInsideMaskZip,
   decodeSingleChannelPngBuffer,
   exportMaskButton,
@@ -540,6 +552,7 @@ export {
 export {
   chooseRopObjective,
   importRopObjectiveScript,
+  pressNewProjectionUntilBatchReady,
   pressNewProjectionUntilProjectionReady,
   pressNewProjectionUntilScoreShows,
   pressNewProjectionUntilSeedShows,
@@ -551,18 +564,25 @@ export {
   ropNewProjectionButton,
   ropObjectivePicker,
   ropOptionsPanel,
+  ropPerBandScoreRowForBand,
+  ropPerBandScoreRows,
   ropPinnedPanelReadout,
   ropProjectionCountField,
+  ropProjectionsPerPressField,
   ropScoreReadout,
   ropSearchButton,
   ropSeedReadout,
+  ropSourcePanelReadout,
+  ropUseSelectedPanelButton,
   ROP_NO_CANDIDATE_TEXT,
   ROP_PANEL_LABEL,
   ROP_PRESS_REFUSED_TEXT,
   ROP_PROJECTION_READY_TEXT,
   setForcedRopSeed,
   setRopProjectionCount,
+  setRopProjectionsPerPress,
   startRopProjectionSearch,
+  useTheSelectedPanelAsRopSource,
 } from "./rop-panel";
 export { enqueueOpenDialogPaths } from "./dialog-stub-controls";
 export { reimportPanelSourceFromDisk, reimportSuccessToast } from "./reimport-source";

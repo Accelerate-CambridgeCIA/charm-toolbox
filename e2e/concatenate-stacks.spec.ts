@@ -21,6 +21,8 @@ import {
   chooseLoadedPanelAsSecondStack,
   concatenateStacksSecondStackField,
 } from "./support/concatenate-stacks-operation";
+import { removeDisplayedBand } from "./support/band-management";
+import { expectPanelHeaderActiveBand } from "./support/panel-header-label";
 
 // CT-300: concatenate the active stack's bands with a second open stack of the
 // same spatial dimensions, active bands first then the second stack's, values
@@ -70,6 +72,34 @@ test("concatenates two open stacks into a wider stack, active bands first", asyn
     actionLabel: CONCATENATE_STACKS_LABEL,
     detailSubstrings: ["Panel 2"],
   });
+});
+
+test("renumbers bands sequentially after concatenation, so band removal targets the band shown", async () => {
+  await loadFixtureAsStack(launched.window, multiBandTiff.fileName);
+  await loadFixtureAsStack(launched.window, multiBandTiff.fileName);
+  await selectPanel(launched.window, 1);
+  await openOperation(launched.window, CONCATENATE_STACKS_LABEL);
+  await chooseLoadedPanelAsSecondStack(launched.window, MULTIBAND_PANEL_2_OPTION);
+  await applyOperationInPlace(launched.window, CONCATENATE_STACKS_LABEL);
+
+  await selectActiveBandNumberInPanel(launched.window, 1, 4);
+  await expectPanelHeaderActiveBand(launched.window, 1, 4);
+  await selectActiveBandNumberInPanel(launched.window, 1, 6);
+  await expectPanelHeaderActiveBand(launched.window, 1, 6);
+
+  await selectActiveBandNumberInPanel(launched.window, 1, 5);
+  await removeDisplayedBand(launched.window, 5);
+
+  await selectActiveBandNumberInPanel(launched.window, 1, 5);
+  await expectPixelReadoutToEqual(launched.window, {
+    panel: 1,
+    imageX: 0,
+    imageY: 0,
+    dimensions: FOUR_BY_FOUR,
+    expected: multibandCornerValue(2),
+  });
+  const metadata = await readMetadata(launched.window);
+  expect(metadata.bandCount).toBe("5");
 });
 
 test("does not offer a source panel of a different size, and blocks Apply", async () => {

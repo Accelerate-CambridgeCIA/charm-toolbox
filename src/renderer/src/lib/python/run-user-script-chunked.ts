@@ -86,9 +86,13 @@ export async function runUserScriptOverCubeInChunks(
 // each execute reuses the retained spool in main, so repeated runs (the ROP
 // panel's presses) never re-upload the source stack. release() drops the spool.
 export interface UserScriptRunSession {
+  // CT-336: builtinModuleName runs a DIFFERENT built-in module against the same
+  // retained cube (ROP's search runs rop_search in the press session); absent
+  // means the module the session was opened with.
   execute(
     params: Record<string, unknown> | undefined,
     callbacks?: ChunkedUserScriptRunCallbacks,
+    builtinModuleName?: ToolboxBuiltinScriptName,
   ): Promise<ToolboxRunUserScriptResult>;
   release(): Promise<void>;
 }
@@ -100,7 +104,9 @@ export type UserScriptRunSessionOpenResult =
 
 // Throws OperationStoppedError on an aborted upload and rethrows transport
 // errors (releasing the begun run first); callers map those like the one-shot
-// wrappers below do.
+// wrappers below do. CT-335: a session exists to execute MANY times, so its
+// begin asks main for a resident worker (one interpreter loads the cube once
+// and answers every execute); the one-shot wrapper keeps spawning per run.
 export async function openUserScriptRunSessionOverCube(
   api: UserScriptRunChunkedApi,
   cube: UserScriptRunCubeInput,
@@ -110,7 +116,22 @@ export async function openUserScriptRunSessionOverCube(
   chunkBytes: number = USER_SCRIPT_RUN_CHUNK_BYTES,
   extras: UserScriptRunExtras = {},
 ): Promise<UserScriptRunSessionOpenResult> {
-  const begun = await api.beginUserScriptRun(buildBeginRequest(cube, source, resultKind, extras));
+  return openRunSessionOverCube(api, cube, source, resultKind, callbacks, chunkBytes, extras, true);
+}
+
+async function openRunSessionOverCube(
+  api: UserScriptRunChunkedApi,
+  cube: UserScriptRunCubeInput,
+  source: ToolboxRunUserScriptSource,
+  resultKind: ToolboxRunUserScriptResultKind,
+  callbacks: ChunkedUserScriptRunCallbacks,
+  chunkBytes: number,
+  extras: UserScriptRunExtras,
+  withResidentWorker: boolean,
+): Promise<UserScriptRunSessionOpenResult> {
+  const begun = await api.beginUserScriptRun(
+    buildBeginRequest(cube, source, resultKind, extras, withResidentWorker),
+  );
   if (begun.status !== "ready") return begun;
   callbacks.onRunReady?.();
   await uploadCubeAndMasksReleasingRunOnFailure(api, cube, begun.token, callbacks, chunkBytes, extras);
@@ -141,8 +162,8 @@ function buildOpenUserScriptRunSession(
   sourceName: string | null,
 ): UserScriptRunSession {
   return {
-    execute: async (params, callbacks = {}) => {
-      const executed = await executeRunKillingWorkerOnAbort(api, token, callbacks, params);
+    execute: async (params, callbacks = {}, builtinModuleName) => {
+      const executed = await executeRunKillingWorkerOnAbort(api, token, callbacks, params, builtinModuleName);
       throwIfOperationStopped(callbacks.abortSignal);
       return assembleExecutedRunResult(api, token, executed, sourceName);
     },
@@ -160,7 +181,7 @@ async function openSessionMappingTransferFailure(
   extras: UserScriptRunExtras,
 ): Promise<UserScriptRunSessionOpenResult> {
   try {
-    return await openUserScriptRunSessionOverCube(api, cube, source, resultKind, callbacks, chunkBytes, extras);
+    return await openRunSessionOverCube(api, cube, source, resultKind, callbacks, chunkBytes, extras, false);
   } catch (error) {
     if (isOperationStoppedError(error)) throw error;
     return { status: "failed", message: describeUserScriptRunTransferFailure(error) };
@@ -180,11 +201,14 @@ async function executeSessionMappingTransferFailure(
   }
 }
 
+// The residentWorker flag rides only session begins, so a one-shot begin
+// request stays byte-identical to what it was before CT-335.
 function buildBeginRequest(
   cube: UserScriptRunCubeInput,
   source: ToolboxRunUserScriptSource,
   resultKind: ToolboxRunUserScriptResultKind,
   extras: UserScriptRunExtras,
+  withResidentWorker: boolean,
 ): ToolboxUserScriptRunBeginRequest {
   const maskCount = extras.masks?.length ?? 0;
   return {
@@ -192,6 +216,7 @@ function buildBeginRequest(
     resultKind,
     cube: describeCube(cube),
     ...(maskCount > 0 ? { masks: { count: maskCount } } : {}),
+    ...(withResidentWorker ? { residentWorker: true } : {}),
   };
 }
 
@@ -234,6 +259,7 @@ async function executeRunKillingWorkerOnAbort(
   token: string,
   callbacks: ChunkedUserScriptRunCallbacks,
   params: Record<string, unknown> | undefined,
+  builtinModuleName: ToolboxBuiltinScriptName | undefined,
 ): Promise<ToolboxUserScriptRunExecuteResult> {
   const abortSignal = callbacks.abortSignal;
   const killWorkerBecauseStopped = (): void => {
@@ -243,11 +269,23 @@ async function executeRunKillingWorkerOnAbort(
   abortSignal?.addEventListener("abort", killWorkerBecauseStopped, { once: true });
   const unsubscribeProgress = subscribeToWorkerProgressForToken(api, token, callbacks.onWorkerProgress);
   try {
-    return await api.executeUserScriptRun({ token, ...(params !== undefined ? { params } : {}) });
+    return await api.executeUserScriptRun(buildExecuteRequest(token, params, builtinModuleName));
   } finally {
     unsubscribeProgress();
     abortSignal?.removeEventListener("abort", killWorkerBecauseStopped);
   }
+}
+
+function buildExecuteRequest(
+  token: string,
+  params: Record<string, unknown> | undefined,
+  builtinModuleName: ToolboxBuiltinScriptName | undefined,
+): ToolboxUserScriptRunExecuteRequest {
+  return {
+    token,
+    ...(params !== undefined ? { params } : {}),
+    ...(builtinModuleName !== undefined ? { builtinModuleName } : {}),
+  };
 }
 
 function subscribeToWorkerProgressForToken(

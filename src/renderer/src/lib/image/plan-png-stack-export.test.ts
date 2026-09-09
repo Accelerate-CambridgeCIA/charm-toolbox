@@ -6,6 +6,7 @@ import {
   requireScientificMultiBandRasterForPngStack,
   type PngStackFileUploadPlan,
 } from "@/lib/image/plan-png-stack-export";
+import { decodeMaskPngBytes } from "@/lib/masks/mask-png-decode";
 import type { RasterImage } from "@/lib/image/raster-image";
 import type { ViewportImageSource } from "@/lib/webgl/texture";
 
@@ -84,6 +85,31 @@ describe("planPngStackExportUpload", () => {
     expect(files.every((file) => file.encoding === undefined)).toBe(true);
     expect(await collectPlanBytes(files[0]!)).toEqual(encodedBands[0]);
     expect(await collectPlanBytes(files[1]!)).toEqual(encodedBands[1]);
+  });
+});
+
+// CT-339: without an injected encoder, the 8-bit stack export writes each
+// band as a one-channel grayscale PNG (not an RGB canvas file).
+describe("planPngStackExportUpload default 8-bit band encoder", () => {
+  it("writes each band as a one-channel grayscale PNG", async () => {
+    const raster: RasterImage = {
+      width: 2,
+      height: 1,
+      bandCount: 2,
+      bitsPerSample: 8,
+      sampleFormat: "uint",
+      bandPixels: [new Uint8Array([0, 255]), new Uint8Array([10, 20])],
+    };
+    const files = await planPngStackExportUpload({
+      source: asSource(raster),
+      originalFileName: "cube.tif",
+      formatId: "png-stack-8-bit",
+      displayMapping: DEFAULT_VIEWPORT_DISPLAY_MAPPING_STATE,
+    });
+    const decodedFirst = await decodeMaskPngBytes(await collectPlanBytes(files[0]!));
+    const decodedSecond = await decodeMaskPngBytes(await collectPlanBytes(files[1]!));
+    expect(decodedFirst).toEqual({ width: 2, height: 1, values: Uint8Array.from([0, 255]) });
+    expect(decodedSecond).toEqual({ width: 2, height: 1, values: Uint8Array.from([10, 20]) });
   });
 });
 

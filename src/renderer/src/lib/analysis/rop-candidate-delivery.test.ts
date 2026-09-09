@@ -7,12 +7,13 @@ import { DEFAULT_VIEWPORT_RENDERING_STATE, type ViewportRenderingState } from "@
 import type { GridLayout } from "@/lib/grid/grid-layout";
 import { makeFloat32RasterFromBands } from "@/lib/image/make-float-raster";
 import type { RasterImage } from "@/lib/image/raster-image";
-import { buildErrorToastOptions } from "@/lib/notifications/toast-options";
+import { buildTransientErrorToastOptions } from "@/lib/notifications/toast-options";
 import { toast } from "sonner";
 
 import {
   buildRopCandidateDeliveryPort,
   canOpenFreshRopCandidatePanel,
+  canRopRunDeliverSomewhere,
   deliverRopCandidateToPanel,
   isLiveCandidatePanelIntact,
   resolveRopCandidateReplaceIndexOrNull,
@@ -107,7 +108,7 @@ const NOOP_HANDLE = { id: "test", update: () => undefined, clear: () => undefine
 
 const REQUEST = {
   seed: 7,
-  values: Float32Array.from([3, 4]),
+  bands: [Float32Array.from([3, 4])],
   width: 2,
   height: 1,
   score: null,
@@ -126,6 +127,21 @@ describe("canOpenFreshRopCandidatePanel", () => {
   });
 });
 
+describe("canRopRunDeliverSomewhere", () => {
+  it("can deliver by replacing the live candidate panel, whether or not a fresh one could also open", () => {
+    expect(canRopRunDeliverSomewhere(CANDIDATE_INDEX, true)).toBe(true);
+    expect(canRopRunDeliverSomewhere(CANDIDATE_INDEX, false)).toBe(true);
+  });
+
+  it("can deliver by opening a fresh panel when there is no live candidate to replace", () => {
+    expect(canRopRunDeliverSomewhere(null, true)).toBe(true);
+  });
+
+  it("refuses when there is nothing to replace and no fresh panel can open", () => {
+    expect(canRopRunDeliverSomewhere(null, false)).toBe(false);
+  });
+});
+
 describe("deliverRopCandidateToPanel", () => {
   it("opens the lowest free panel with a one-band float copy and reports it as the live panel", async () => {
     const bindings = bindingsWith("1x2", 2, [SOURCE_INDEX]);
@@ -135,7 +151,7 @@ describe("deliverRopCandidateToPanel", () => {
     expect(placed?.kind === "raster" && placed.raster).toBe(live?.raster);
     expect(live?.raster).toMatchObject({ width: 2, height: 1, bandCount: 1, sampleFormat: "float" });
     expect(Array.from(live?.raster.bandPixels[0] ?? [])).toEqual([3, 4]);
-    expect(live?.raster.bandPixels[0]?.buffer).not.toBe(REQUEST.values.buffer);
+    expect(live?.raster.bandPixels[0]?.buffer).not.toBe(REQUEST.bands[0]?.buffer);
     expect(toast.success).toHaveBeenCalledWith("Projection ready", expect.anything());
   });
 
@@ -167,7 +183,7 @@ describe("deliverRopCandidateToPanel", () => {
     expect(live).toBeNull();
     expect(toast.error).toHaveBeenCalledWith(
       ROP_PRESS_NEEDS_A_FREE_PANEL_MESSAGE,
-      buildErrorToastOptions(),
+      buildTransientErrorToastOptions(),
     );
     expect(bindings.setPendingDuplicate).not.toHaveBeenCalled();
   });

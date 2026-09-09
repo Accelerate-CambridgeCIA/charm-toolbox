@@ -28,13 +28,15 @@ describe("operation menu structure (CT-289 Jul 30 meeting list)", () => {
 
   // Operation menus present flat and alphabetical (no separators), so each
   // expectation below is the exact list a user sees, in order.
-  it("puts selection, geometry, and stack preparation under Tools", () => {
+  it("puts selection, geometry, stack preparation, and analysis tools under Tools", () => {
     expect(listMenuItemLabels(findMenuByLabel("Tools"))).toEqual([
       "Bit Shift",
+      "CNR",
       "Crop to Region",
       "Flat-field Correction",
       "Flip",
       "Masks",
+      "NPC",
       "RGB to Grayscale",
       "Rotate",
       "Select Region",
@@ -61,14 +63,12 @@ describe("operation menu structure (CT-289 Jul 30 meeting list)", () => {
 
   it("puts cross-band and whole-cube operations under Multi-band", () => {
     expect(listMenuItemLabels(findMenuByLabel("Multi-band"))).toEqual([
-      "CNR",
       "Concatenate Stacks",
       "ICA",
       "L2 Minimization",
       "Local MNF",
       "Local PCA",
       "MNF",
-      "NPC",
       "PCA",
       "RGB Color Composite",
       "ROP",

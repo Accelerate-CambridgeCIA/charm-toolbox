@@ -29,8 +29,9 @@ import {
   OperationStoppedError,
   OPERATION_STOPPED_MESSAGE,
 } from "@/lib/image/operation-stop";
-import { notifyError, notifySuccess } from "@/lib/notifications/notify";
+import { notifyError, notifyPersistentError, notifySuccess } from "@/lib/notifications/notify";
 import { toast } from "sonner";
+import { RasterMemoryAllocationError } from "@/lib/image/raster-allocation";
 import { getImageSourceDimensions, type ViewportImageSource } from "@/lib/webgl/texture";
 import {
   MASKS_REMOVED_BY_GEOMETRY_CHANGE_MESSAGE,
@@ -139,14 +140,20 @@ function reportApplySucceededWithToast(
 
 // CT-261: a failed apply also clears the source's operation region, so no
 // unremovable box survives the failure (success clears it via
-// clearConsumedSourceStateAfterApply).
+// clearConsumedSourceStateAfterApply). CT-347: memory errors persist
+// indefinitely (user must read which panels to close), others auto-dismiss.
 function reportApplyFailedWithToast(
   action: RegisteredViewportAction,
   sourceIndex: number,
   bindings: ApplyActionFlowBindings,
   error: unknown,
 ): void {
-  notifyError(formatActionErrorMessage(action.label, error));
+  const message = formatActionErrorMessage(action.label, error);
+  if (error instanceof RasterMemoryAllocationError) {
+    notifyPersistentError(message);
+  } else {
+    notifyError(message);
+  }
   clearOperationRegionAtViewportIndex(sourceIndex, bindings);
   bindings.reportApplyOutcome?.({ succeeded: false });
 }
@@ -832,7 +839,7 @@ function writeViewportContentAtIndex(
 // CT-190: surface an unappliable operation (e.g. RGB-to-grayscale on a non-RGB
 // image) as an error toast BEFORE any panel is reserved or the grid is expanded,
 // so a failure opens no blank panel and records no History entry. Returns true
-// when the apply flow must stop.
+// when the apply flow must stop. CT-347: memory errors persist indefinitely.
 function reportActionCannotApplyToSourceBeforeOpeningPanel(
   action: RegisteredViewportAction,
   source: ViewportImageSource,
@@ -843,7 +850,12 @@ function reportActionCannotApplyToSourceBeforeOpeningPanel(
     action.assertCanApplyToSource(source, parameterValues);
     return false;
   } catch (error) {
-    notifyError(formatActionErrorMessage(action.label, error));
+    const message = formatActionErrorMessage(action.label, error);
+    if (error instanceof RasterMemoryAllocationError) {
+      notifyPersistentError(message);
+    } else {
+      notifyError(message);
+    }
     return true;
   }
 }

@@ -3,12 +3,15 @@ import { X } from "lucide-react";
 import { toast } from "sonner";
 
 import { PANEL_SELECT_CLASSES } from "@/components/form-control-classes";
+import { PerBandScoreSection } from "@/components/per-band-score-section";
+import { RopPressSection } from "@/components/rop-press-section";
 import { RopSearchSection } from "@/components/rop-search-section";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ROP_PANEL_ICON } from "@/lib/actions/operation-command-bindings";
 import { ROP_KEPT_SUCCESS_MESSAGE, type RopKeepRequest } from "@/lib/actions/rop-keep-action";
 import {
+  canRopRunDeliverSomewhere,
   ROP_PRESS_NEEDS_A_FREE_PANEL_MESSAGE,
   type RopCandidateDeliveryPort,
   type RopLiveCandidatePanel,
@@ -31,34 +34,48 @@ import {
 } from "@/lib/analysis/rop-objective";
 import {
   dropScoresAfterObjectiveChange,
+  mapRopScoresToPlotValues,
   retainBestScoringRopCandidate,
+  type RopBestProjection,
   type RopCandidate,
 } from "@/lib/analysis/rop-candidate";
-import { formatRopScoreToSignificantFigures } from "@/lib/analysis/rop-format";
 import {
+  describeRopBestProjectionReadout,
+  describeRopCandidateSeedReadout,
+  formatRopProjectionBandLabel,
+  formatRopScoreToSignificantFigures,
+  formatRopScoringBusyLabel,
+} from "@/lib/analysis/rop-format";
+import {
+  DEFAULT_ROP_PROJECTIONS_PER_PRESS,
   drawRopSeed,
+  parseRopProjectionsPerPressOrNull,
   readForcedRopSeedFromE2eBridgeOrNull,
 } from "@/lib/analysis/rop-run-request";
 import { listNonEmptyCategoryValuesInMaskLayer } from "@/lib/analysis/npc-qualification";
-import { DEFAULT_NPC_BIN_COUNT } from "@/lib/analysis/npc-run-request";
+import { DEFAULT_NPC_BIN_COUNT, buildNpcCategoryMasks } from "@/lib/analysis/npc-run-request";
 import {
   DEFAULT_ROP_SEARCH_PROJECTION_COUNT,
   parseRopSearchProjectionCountOrNull,
   type RopSearchRunRequest,
 } from "@/lib/analysis/rop-search-request";
-import { searchBestRopProjectionShowingPanelBusy } from "@/lib/analysis/run-rop-search";
 import {
   createRopProjectionSessionHolder,
   scoreRopCandidateShowingPanelBusy,
   type RopProjectionSessionHolder,
   type RopRollOutcome,
 } from "@/lib/analysis/run-rop-analysis";
+import { makeFloat32RasterFromBands } from "@/lib/image/make-float-raster";
 import { OPERATION_STOPPED_MESSAGE } from "@/lib/image/operation-stop";
 import type { RasterImage } from "@/lib/image/raster-image";
 import type { MaskLayer } from "@/lib/masks/mask-layer";
 import type { MaskPanelState } from "@/lib/masks/mask-panel";
 import { notifyError, notifySuccess } from "@/lib/notifications/notify";
-import { useBusyEntryRegistrar, type BusyEntryRegistrar } from "@/state/busy-state-context";
+import {
+  useBusyEntryRegistrar,
+  type BusyEntryHandle,
+  type BusyEntryRegistrar,
+} from "@/state/busy-state-context";
 
 // CT-309: the ROP aside. Every "New projection" press draws a fresh seed and
 // re-executes the built-in rop.py against the session-retained cube. With an
@@ -86,9 +103,18 @@ export interface RopPanelTarget {
   readonly masks: MaskPanelState;
 }
 
+// CT-333: the aside stays PINNED to its source panel and moves only through
+// "Use selected panel". App offers the panel that press would move to, or null
+// when nothing eligible is selected.
+export interface RopRepinOffer {
+  readonly selectedPanelNumber: number | null;
+  readonly onUseSelectedPanel: () => void;
+}
+
 export interface RopOptionsPanelProps {
   readonly target: RopPanelTarget | null;
   readonly candidateDelivery: RopCandidateDeliveryPort;
+  readonly repinOffer: RopRepinOffer;
   readonly onKeepCandidateAsNewStack: (request: RopKeepRequest) => void;
   readonly onClose: () => void;
 }
@@ -104,6 +130,7 @@ export function RopOptionsPanel(props: RopOptionsPanelProps): JSX.Element {
         <RopPanelBody
           target={props.target}
           candidateDelivery={props.candidateDelivery}
+          repinOffer={props.repinOffer}
           onKeepCandidateAsNewStack={props.onKeepCandidateAsNewStack}
         />
       </div>
@@ -151,6 +178,7 @@ function RopPanelCloseButton({ onClose }: { readonly onClose: () => void }): JSX
 interface RopPanelBodyProps {
   readonly target: RopPanelTarget | null;
   readonly candidateDelivery: RopCandidateDeliveryPort;
+  readonly repinOffer: RopRepinOffer;
   readonly onKeepCandidateAsNewStack: (request: RopKeepRequest) => void;
 }
 
@@ -159,8 +187,20 @@ function RopPanelBody(props: RopPanelBodyProps): JSX.Element {
   return (
     <>
       <RopExplanation />
+      <RopSourcePanelSection
+        sourcePanelNumber={props.target?.viewportNumber ?? null}
+        repinOffer={props.repinOffer}
+        isRunning={controller.isRolling || controller.isSearching}
+      />
       <RopObjectiveSection controller={controller} />
-      <RopNewProjectionButton controller={controller} />
+      <RopPressSection
+        projectionsPerPressText={controller.projectionsPerPressText}
+        onChangeProjectionsPerPressText={controller.changeProjectionsPerPressText}
+        hasUsableProjectionsPerPress={controller.hasUsableProjectionsPerPress}
+        canRollNow={controller.canRollNow}
+        isRolling={controller.isRolling}
+        onPress={() => void controller.rollNewProjection()}
+      />
       <RopCandidateReadout controller={controller} />
       <RopBestCandidateReadout controller={controller} />
       <RopSearchSection
@@ -170,6 +210,7 @@ function RopPanelBody(props: RopPanelBodyProps): JSX.Element {
         canSearchNow={controller.canSearchNow}
         isSearching={controller.isSearching}
         onSearch={() => void controller.runProjectionSearch()}
+        deliveryRefusesEveryPanel={controller.deliveryRefusesEveryPanel}
       />
     </>
   );
@@ -179,12 +220,77 @@ function RopExplanation(): JSX.Element {
   return (
     <p className="text-xs text-muted-foreground">
       Each press of New projection opens a fresh random orthogonal projection of
-      this stack as a one-band stack in its own panel; the next press replaces
-      it. Keep freezes the one on screen so it is not replaced; with an
-      objective selected the best-scoring candidate is always retained.
+      the source panel as a stack in its own panel; the next press replaces it.
+      Keep freezes the one on screen so it is not replaced; a search winner is
+      kept automatically. With an objective selected the best-scoring candidate
+      is always retained.
     </p>
   );
 }
+
+interface RopSourcePanelSectionProps {
+  readonly sourcePanelNumber: number | null;
+  readonly repinOffer: RopRepinOffer;
+  readonly isRunning: boolean;
+}
+
+function RopSourcePanelSection(props: RopSourcePanelSectionProps): JSX.Element {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <output aria-label="ROP source panel" className="text-xs text-muted-foreground">
+        {describeRopSourcePanel(props.sourcePanelNumber)}
+      </output>
+      <UseSelectedPanelButton offer={props.repinOffer} isRunning={props.isRunning} />
+    </div>
+  );
+}
+
+function describeRopSourcePanel(sourcePanelNumber: number | null): string {
+  if (sourcePanelNumber === null) return NO_SOURCE_PANEL_TEXT;
+  return `Projecting from Panel ${sourcePanelNumber}`;
+}
+
+interface UseSelectedPanelButtonProps {
+  readonly offer: RopRepinOffer;
+  readonly isRunning: boolean;
+}
+
+function UseSelectedPanelButton(props: UseSelectedPanelButtonProps): JSX.Element {
+  const offeredPanelNumber = props.offer.selectedPanelNumber;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Use selected panel"
+            disabled={offeredPanelNumber === null || props.isRunning}
+            onClick={props.offer.onUseSelectedPanel}
+          >
+            {describeUseSelectedPanelLabel(offeredPanelNumber)}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{describeUseSelectedPanelTooltip(offeredPanelNumber)}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function describeUseSelectedPanelLabel(offeredPanelNumber: number | null): string {
+  if (offeredPanelNumber === null) return USE_SELECTED_PANEL_TEXT;
+  return `${USE_SELECTED_PANEL_TEXT} (Panel ${offeredPanelNumber})`;
+}
+
+function describeUseSelectedPanelTooltip(offeredPanelNumber: number | null): string {
+  if (offeredPanelNumber === null) return NO_OTHER_STACK_SELECTED_TEXT;
+  return `Project from Panel ${offeredPanelNumber} instead.`;
+}
+
+const NO_SOURCE_PANEL_TEXT = "No source panel";
+const USE_SELECTED_PANEL_TEXT = "Use selected panel";
+const NO_OTHER_STACK_SELECTED_TEXT = "Select one other stack to project from it.";
 
 // --- Objective controls ------------------------------------------------------
 
@@ -318,28 +424,14 @@ function RopCustomScriptControls({ controller }: RopControllerProps): JSX.Elemen
 
 // --- Candidate readouts ------------------------------------------------------
 
-function RopNewProjectionButton({ controller }: RopControllerProps): JSX.Element {
-  return (
-    <Button
-      type="button"
-      disabled={!controller.canRollNow}
-      onClick={() => void controller.rollNewProjection()}
-    >
-      {controller.isRolling ? "Projecting..." : "New projection"}
-    </Button>
-  );
-}
-
 function RopCandidateReadout({ controller }: RopControllerProps): JSX.Element {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs font-medium text-muted-foreground">Current candidate</span>
       <output aria-label="ROP seed" className="font-mono text-sm text-foreground">
-        {controller.current === null ? NO_CANDIDATE_YET_TEXT : `Seed ${controller.current.seed}`}
+        {describeCurrentRopCandidate(controller.current)}
       </output>
-      {controller.objectiveKind === "none" ? null : (
-        <RopScoreLine ariaLabel="ROP score" score={controller.current?.score ?? null} />
-      )}
+      <RopCandidateScoreReadout controller={controller} />
       <Button
         type="button"
         variant="outline"
@@ -352,14 +444,39 @@ function RopCandidateReadout({ controller }: RopControllerProps): JSX.Element {
   );
 }
 
+function describeCurrentRopCandidate(current: RopCandidate | null): string {
+  if (current === null) return NO_CANDIDATE_YET_TEXT;
+  return describeRopCandidateSeedReadout(current.seed, current.bands.length);
+}
+
+// CT-337: a batch is read the way every other per-band analysis is read (the
+// CT-319 plot plus its Top bands list); a single projection keeps the one-line
+// score the panel has always shown.
+function RopCandidateScoreReadout({ controller }: RopControllerProps): JSX.Element {
+  if (controller.objectiveKind === "none") return <></>;
+  if (controller.candidateBatchRaster === null) {
+    return <RopScoreLine ariaLabel="ROP score" score={controller.current?.scores[0] ?? null} />;
+  }
+  return (
+    <PerBandScoreSection
+      scoreName={OBJECTIVE_LABELS[controller.objectiveKind]}
+      raster={controller.candidateBatchRaster}
+      scores={mapRopScoresToPlotValues(controller.current?.scores ?? [])}
+      formatScore={formatRopScoreToSignificantFigures}
+      notComputedText={NOT_SCORED_TEXT}
+    />
+  );
+}
+
 function RopBestCandidateReadout({ controller }: RopControllerProps): JSX.Element {
-  if (controller.best === null) return <></>;
+  const best = controller.best;
+  if (best === null) return <></>;
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs font-medium text-muted-foreground">
-        Best so far (seed {controller.best.seed})
+        Best so far ({describeBestRopProjection(best)})
       </span>
-      <RopScoreLine ariaLabel="Best ROP score" score={controller.best.score} />
+      <RopScoreLine ariaLabel="Best ROP score" score={best.score} />
       <Button
         type="button"
         variant="outline"
@@ -369,6 +486,14 @@ function RopBestCandidateReadout({ controller }: RopControllerProps): JSX.Elemen
         Keep best
       </Button>
     </div>
+  );
+}
+
+function describeBestRopProjection(best: RopBestProjection): string {
+  return describeRopBestProjectionReadout(
+    best.candidate.seed,
+    best.bandIndex + 1,
+    best.candidate.bands.length,
   );
 }
 
@@ -393,13 +518,14 @@ const NOT_SCORED_TEXT = "Not scored";
 
 interface RopPanelState {
   readonly current: RopCandidate | null;
-  readonly best: RopCandidate | null;
+  readonly best: RopBestProjection | null;
   // CT-316: the panel holding the last delivered candidate, recognised by
   // raster identity before every press; null once it was closed or changed.
   readonly liveCandidatePanel: RopLiveCandidatePanel | null;
   readonly isRolling: boolean;
   readonly isSearching: boolean;
   readonly projectionCountText: string;
+  readonly projectionsPerPressText: string;
   readonly objectiveKind: RopObjectiveKind;
   readonly chosenCnrText: number | null;
   readonly chosenCnrBackground: number | null;
@@ -413,6 +539,7 @@ const INITIAL_ROP_PANEL_STATE: RopPanelState = {
   isRolling: false,
   isSearching: false,
   projectionCountText: String(DEFAULT_ROP_SEARCH_PROJECTION_COUNT),
+  projectionsPerPressText: String(DEFAULT_ROP_PROJECTIONS_PER_PRESS),
   objectiveKind: "none",
   chosenCnrText: null,
   chosenCnrBackground: null,
@@ -421,13 +548,20 @@ const INITIAL_ROP_PANEL_STATE: RopPanelState = {
 
 interface RopPanelController {
   readonly current: RopCandidate | null;
-  readonly best: RopCandidate | null;
+  readonly best: RopBestProjection | null;
+  // CT-337: the candidate's bands as a stack, so the per-band score section can
+  // plot them; null while a press draws a single projection.
+  readonly candidateBatchRaster: RasterImage | null;
   readonly isRolling: boolean;
   readonly isSearching: boolean;
   readonly projectionCountText: string;
+  readonly projectionsPerPressText: string;
+  readonly hasUsableProjectionsPerPress: boolean;
   readonly isObjectiveChosen: boolean;
   readonly canSearchNow: boolean;
+  readonly deliveryRefusesEveryPanel: boolean;
   readonly changeProjectionCountText: (text: string) => void;
+  readonly changeProjectionsPerPressText: (text: string) => void;
   readonly runProjectionSearch: () => Promise<void>;
   readonly objectiveKind: RopObjectiveKind;
   readonly qualifyingLayer: MaskLayer | null;
@@ -461,6 +595,8 @@ function useRopPanelController(props: RopPanelBodyProps): RopPanelController {
     ...buildRopObjectiveChoiceHandlers(setState),
     changeProjectionCountText: (text) =>
       setState((previous) => ({ ...previous, projectionCountText: text })),
+    changeProjectionsPerPressText: (text) =>
+      setState((previous) => ({ ...previous, projectionsPerPressText: text })),
     rollNewProjection: () => rollNewRopProjection(press, state.liveCandidatePanel),
     keepTheCandidateOnScreen: () => carryOutRopKeep("keep-current", keep),
     keepTheBestCandidate: () => carryOutRopKeep("keep-best", keep),
@@ -515,12 +651,17 @@ function releaseRopSessionSlot(sessionRef: React.MutableRefObject<RopSessionSlot
 
 interface RopControllerReadouts {
   readonly current: RopCandidate | null;
-  readonly best: RopCandidate | null;
+  readonly best: RopBestProjection | null;
+  readonly candidateBatchRaster: RasterImage | null;
   readonly isRolling: boolean;
   readonly isSearching: boolean;
   readonly projectionCountText: string;
+  readonly projectionsPerPressText: string;
+  readonly projectionsPerPress: number | null;
+  readonly hasUsableProjectionsPerPress: boolean;
   readonly isObjectiveChosen: boolean;
   readonly canSearchNow: boolean;
+  readonly deliveryRefusesEveryPanel: boolean;
   readonly objectiveKind: RopObjectiveKind;
   readonly qualifyingLayer: MaskLayer | null;
   readonly maskObjectivesAvailable: boolean;
@@ -543,25 +684,61 @@ function deriveRopControllerReadouts(
   const qualifyingLayer = target ? findQualifyingRopMaskLayerOrNull(target.masks) : null;
   const objectiveKind = clampObjectiveKindToAvailability(state.objectiveKind, qualifyingLayer);
   const cnrChoice = resolveCnrCategoryChoice(state, qualifyingLayer);
-  const canRollNow = canRollNewProjectionNow(state, target, objectiveKind, cnrChoice);
+  const projectionsPerPress = parseRopProjectionsPerPressOrNull(state.projectionsPerPressText);
+  // The two counts gate their own button only: a half-typed press count must
+  // not disable a search, and vice versa.
+  const canRunAtAll = canRollNewProjectionNow(state, target, objectiveKind, cnrChoice);
+  const keepReadouts = deriveRopKeepReadouts(state, candidateDelivery);
+  const canDeliverSomewhere = canRopRunDeliverSomewhere(
+    keepReadouts.liveCandidatePanelIndex,
+    candidateDelivery.canOpenFreshCandidatePanel(),
+  );
   return {
-    ...deriveRopKeepReadouts(state, candidateDelivery),
+    ...keepReadouts,
     current: state.current,
     best: state.best,
+    candidateBatchRaster: buildRopCandidateBatchRasterOrNull(state.current, target),
     isRolling: state.isRolling,
     isSearching: state.isSearching,
     projectionCountText: state.projectionCountText,
+    projectionsPerPressText: state.projectionsPerPressText,
+    projectionsPerPress,
+    hasUsableProjectionsPerPress: projectionsPerPress !== null,
     objectiveKind,
     qualifyingLayer,
     maskObjectivesAvailable: qualifyingLayer !== null,
     ...cnrChoice,
     customScript: state.customScript,
-    canRollNow,
+    canRollNow: canRunAtAll && projectionsPerPress !== null,
     isObjectiveChosen: objectiveKind !== "none",
-    canSearchNow: canRollNow && objectiveKind !== "none" && hasUsableProjectionCount(state),
+    // CT-330: the delivery pre-check is asked separately (deliveryRefusesEveryPanel)
+    // so the Search button's disabled+tooltip state can explain WHY, and the click
+    // handler still runs its own copy of the same check (checkRopRunCanDeliverSomewhere)
+    // rather than silently no-opping when this flag alone would gate it.
+    canSearchNow: canRunAtAll && objectiveKind !== "none" && hasUsableProjectionCount(state),
+    deliveryRefusesEveryPanel: !canDeliverSomewhere,
     isObjectiveAvailable: (kind) =>
       target !== null && isRopObjectiveKindAvailable(kind, target.masks),
   };
+}
+
+// CT-337: the per-band score section reads a stack, so a batch candidate is
+// wrapped as one (the bands are shared by reference, never copied). A single
+// projection has nothing per-band to show, so it returns null and the panel
+// keeps its one-line score.
+function buildRopCandidateBatchRasterOrNull(
+  current: RopCandidate | null,
+  target: RopPanelTarget | null,
+): RasterImage | null {
+  if (current === null || target === null || current.bands.length < 2) return null;
+  return makeFloat32RasterFromBands(
+    {
+      width: target.raster.width,
+      height: target.raster.height,
+      bandLabels: current.bands.map((_band, index) => formatRopProjectionBandLabel(index + 1)),
+    },
+    current.bands,
+  );
 }
 
 // The pointer is re-resolved against the LATEST panel map on every render, so
@@ -708,6 +885,29 @@ interface RopPress {
   readonly deliveryRef: RopCandidateDeliveryPortRef;
 }
 
+// CT-330: shared by a press and a search, both of which must refuse BEFORE
+// running rather than discover after a long run that the winner has nowhere
+// to land. Resolves the panel a delivery would replace, or refuses (toasting
+// and dropping the stale live-candidate pointer) when neither replacing nor
+// opening a fresh panel is possible.
+type RopRunDeliveryCheck =
+  | { readonly status: "ok"; readonly replaceAtIndex: number | null }
+  | { readonly status: "refused" };
+
+function checkRopRunCanDeliverSomewhere(
+  deliveryRef: RopCandidateDeliveryPortRef,
+  liveCandidatePanel: RopLiveCandidatePanel | null,
+  setState: RopPanelStateWriter,
+): RopRunDeliveryCheck {
+  const replaceAtIndex = deliveryRef.current.resolveReplaceIndexOrNull(liveCandidatePanel);
+  if (canRopRunDeliverSomewhere(replaceAtIndex, deliveryRef.current.canOpenFreshCandidatePanel())) {
+    return { status: "ok", replaceAtIndex };
+  }
+  notifyError(ROP_PRESS_NEEDS_A_FREE_PANEL_MESSAGE);
+  setState((previous) => ({ ...previous, liveCandidatePanel: null }));
+  return { status: "refused" };
+}
+
 // A press that cannot land anywhere is refused BEFORE the projection runs:
 // with a live candidate panel it replaces that panel, otherwise it needs a
 // free panel or a larger layout.
@@ -716,15 +916,11 @@ async function rollNewRopProjection(
   liveCandidatePanel: RopLiveCandidatePanel | null,
 ): Promise<void> {
   if (press.target === null || !press.derived.canRollNow) return;
-  const replaceAtIndex = press.deliveryRef.current.resolveReplaceIndexOrNull(liveCandidatePanel);
-  if (replaceAtIndex === null && !press.deliveryRef.current.canOpenFreshCandidatePanel()) {
-    notifyError(ROP_PRESS_NEEDS_A_FREE_PANEL_MESSAGE);
-    press.setState((previous) => ({ ...previous, liveCandidatePanel: null }));
-    return;
-  }
+  const check = checkRopRunCanDeliverSomewhere(press.deliveryRef, liveCandidatePanel, press.setState);
+  if (check.status === "refused") return;
   press.setState((previous) => ({ ...previous, isRolling: true }));
   try {
-    await rollScoreAndDeliverOneCandidate(press, press.target, replaceAtIndex);
+    await rollScoreAndDeliverOneCandidate(press, press.target, check.replaceAtIndex);
   } finally {
     press.setState((previous) => ({ ...previous, isRolling: false }));
   }
@@ -741,8 +937,8 @@ async function rollScoreAndDeliverOneCandidate(
     reportRollProblem(rolled);
     return;
   }
-  const score = await scoreRolledCandidateOrNull(rolled.values, target, press.derived, press.busyRegistrar);
-  const candidate = commitRolledCandidate(seed, rolled.values, score, press.setState);
+  const scores = await scoreEachRolledProjection(rolled.bands, target, press);
+  const candidate = commitRolledCandidate(seed, rolled.bands, scores, press.setState);
   await deliverCandidateToItsPanel(press, target, candidate, replaceAtIndex);
 }
 
@@ -751,8 +947,8 @@ function executeProjectionForSeed(
   target: RopPanelTarget,
   seed: number,
 ): Promise<RopRollOutcome> {
-  const holder = takeOrCreateSessionHolderForRaster(press.sessionRef, target.raster);
-  return holder.executeProjectionShowingPanelBusy(seed, {
+  const holder = takeOrCreateSessionHolderForRaster(press.sessionRef, target.raster, press.derived);
+  return holder.executeProjectionShowingPanelBusy(seed, press.derived.projectionsPerPress ?? 1, {
     busyRegistrar: press.busyRegistrar,
     viewportIndex: target.viewportIndex,
     stopController: new AbortController(),
@@ -773,17 +969,26 @@ async function deliverCandidateToItsPanel(
   press.setState((previous) => ({ ...previous, liveCandidatePanel: delivered }));
 }
 
+// CT-336: the session uploads the qualifying layer's category masks so its
+// search objective can score without a second upload; rop.py ignores them, so a
+// plain press is unaffected. Painting is impossible while the ROP aside is open,
+// so the masks captured here stay valid for the life of the session.
 function takeOrCreateSessionHolderForRaster(
   sessionRef: React.MutableRefObject<RopSessionSlot | null>,
   raster: RasterImage,
+  derived: RopControllerReadouts,
 ): RopProjectionSessionHolder {
   if (sessionRef.current !== null && sessionRef.current.raster === raster) {
     return sessionRef.current.holder;
   }
   releaseRopSessionSlot(sessionRef);
-  const holder = createRopProjectionSessionHolder(raster);
+  const holder = createRopProjectionSessionHolder(raster, buildRopSessionMaskBytes(derived));
   sessionRef.current = { raster, holder };
   return holder;
+}
+
+function buildRopSessionMaskBytes(derived: RopControllerReadouts): ReadonlyArray<Uint8Array> {
+  return derived.qualifyingLayer === null ? [] : buildNpcCategoryMasks(derived.qualifyingLayer);
 }
 
 function reportRollProblem(rolled: Exclude<RopRollOutcome, { status: "rolled" }>): void {
@@ -792,6 +997,50 @@ function reportRollProblem(rolled: Exclude<RopRollOutcome, { status: "rolled" }>
     return;
   }
   notifyError(rolled.message);
+}
+
+// CT-337: every projection of the batch is scored in draw order, and a stopped
+// or failed one leaves that band unscored and the loop carries on.
+async function scoreEachRolledProjection(
+  bands: ReadonlyArray<Float32Array>,
+  target: RopPanelTarget,
+  press: RopPress,
+): Promise<ReadonlyArray<number | null>> {
+  if (press.derived.objectiveKind === "none") return bands.map(() => null);
+  const scores: (number | null)[] = [];
+  for (let index = 0; index < bands.length; index += 1) {
+    scores.push(await scoreOneRolledProjection(bands, index, target, press));
+  }
+  return scores;
+}
+
+// A batch announces which projection it is scoring; a single one keeps the
+// scoring flow's own busy label.
+async function scoreOneRolledProjection(
+  bands: ReadonlyArray<Float32Array>,
+  index: number,
+  target: RopPanelTarget,
+  press: RopPress,
+): Promise<number | null> {
+  const busy = registerProjectionScoringBusyEntryOrNull(bands.length, index, target, press);
+  try {
+    return await scoreRolledCandidateOrNull(bands[index]!, target, press.derived, press.busyRegistrar);
+  } finally {
+    busy?.clear();
+  }
+}
+
+function registerProjectionScoringBusyEntryOrNull(
+  projectionCount: number,
+  index: number,
+  target: RopPanelTarget,
+  press: RopPress,
+): BusyEntryHandle | null {
+  if (projectionCount < 2) return null;
+  return press.busyRegistrar.registerViewportBusyEntry({
+    viewportIndex: target.viewportIndex,
+    label: formatRopScoringBusyLabel(index + 1, projectionCount),
+  });
 }
 
 // A stopped or failed scoring run keeps the candidate (its stack is still
@@ -830,11 +1079,11 @@ function reportScoreOutcome(
 
 function commitRolledCandidate(
   seed: number,
-  values: Float32Array,
-  score: number | null,
+  bands: ReadonlyArray<Float32Array>,
+  scores: ReadonlyArray<number | null>,
   setState: RopPanelStateWriter,
 ): RopCandidate {
-  const candidate: RopCandidate = { seed, values, score };
+  const candidate: RopCandidate = { seed, bands, scores };
   setState((previous) => ({
     ...previous,
     current: candidate,
@@ -843,21 +1092,54 @@ function commitRolledCandidate(
   return candidate;
 }
 
+// The whole candidate travels as one stack: a batch carries every projection it
+// drew, and its History entry says how many rather than naming one score.
 function buildRopKeepRequestOrNull(
   candidate: RopCandidate | null,
   target: RopPanelTarget | null,
   derived: RopControllerReadouts,
 ): RopKeepRequest | null {
   if (candidate === null || target === null) return null;
+  const score = candidate.bands.length < 2 ? candidate.scores[0] ?? null : null;
   return {
     seed: candidate.seed,
-    values: candidate.values,
+    bands: candidate.bands,
+    ...describeRopKeepRequestShape(target, score, derived),
+    searchedProjectionCount: candidate.searchedProjectionCount ?? null,
+    projectionCount: candidate.bands.length,
+  };
+}
+
+// CT-337: Keep best delivers ONE band of a batch, so its stack names the
+// projection it holds instead of the whole draw.
+function buildRopBestProjectionKeepRequestOrNull(
+  best: RopBestProjection | null,
+  target: RopPanelTarget | null,
+  derived: RopControllerReadouts,
+): RopKeepRequest | null {
+  const band = best?.candidate.bands[best.bandIndex];
+  if (best === undefined || best === null || target === null || band === undefined) return null;
+  return {
+    seed: best.candidate.seed,
+    bands: [band],
+    ...describeRopKeepRequestShape(target, best.score, derived),
+    searchedProjectionCount: best.candidate.searchedProjectionCount ?? null,
+    projectionCount: best.candidate.bands.length,
+    projectionIndex: best.bandIndex + 1,
+  };
+}
+
+function describeRopKeepRequestShape(
+  target: RopPanelTarget,
+  score: number | null,
+  derived: RopControllerReadouts,
+): Pick<RopKeepRequest, "width" | "height" | "score" | "objectiveLabel"> {
+  return {
     width: target.raster.width,
     height: target.raster.height,
-    score: candidate.score,
-    searchedProjectionCount: candidate.searchedProjectionCount ?? null,
+    score,
     objectiveLabel:
-      candidate.score === null
+      score === null
         ? null
         : describeRopObjectiveForHistory(derived.objectiveKind, derived.customScript),
   };
@@ -880,18 +1162,30 @@ function describeRopKeepSituation(
 ): RopKeepSituation {
   return {
     liveCandidatePanelIndex,
-    bestIsTheLiveCandidate: state.best !== null && state.best === state.current,
+    // CT-337: the best BAND belongs to the stack on screen exactly when its
+    // batch is the current candidate, which is when freezing that stack keeps it.
+    bestIsTheLiveCandidate: state.best !== null && state.best.candidate === state.current,
   };
 }
 
 // The live candidate panel shows whatever the last press committed as
 // `current`, so "the best IS the candidate on screen" is that identity.
 function carryOutRopKeep(intent: RopKeepIntent, keep: RopKeepRun): Promise<void> {
-  const candidate = intent === "keep-current" ? keep.state.current : keep.state.best;
-  const request = buildRopKeepRequestOrNull(candidate, keep.target, keep.derived);
+  const request = buildKeepRequestForIntentOrNull(intent, keep);
   if (request === null) return Promise.resolve();
   const situation = describeRopKeepSituation(keep.state, keep.derived.liveCandidatePanelIndex);
   return carryOutRopKeepPlan(planRopKeep(intent, situation), request, keep);
+}
+
+// Keep freezes the whole candidate stack; Keep best speaks about one band of it.
+function buildKeepRequestForIntentOrNull(
+  intent: RopKeepIntent,
+  keep: RopKeepRun,
+): RopKeepRequest | null {
+  if (intent === "keep-current") {
+    return buildRopKeepRequestOrNull(keep.state.current, keep.target, keep.derived);
+  }
+  return buildRopBestProjectionKeepRequestOrNull(keep.state.best, keep.target, keep.derived);
 }
 
 async function carryOutRopKeepPlan(
@@ -934,11 +1228,9 @@ interface RopSearchRun {
 async function runRopProjectionSearch(run: RopSearchRun): Promise<void> {
   const request = buildRopSearchRunRequestOrNull(run.target, run.derived);
   if (run.target === null || request === null || !run.derived.canSearchNow) return;
+  const check = checkRopRunCanDeliverSomewhere(run.keep.deliveryRef, run.keep.state.liveCandidatePanel, run.setState);
+  if (check.status === "refused") return;
   run.setState((previous) => ({ ...previous, isSearching: true }));
-  // The press session's retained spool holds a whole copy of the cube and a
-  // search is long: dropping it keeps one cube on disk instead of two, at the
-  // cost of re-uploading on the next press.
-  releaseRopSessionSlot(run.sessionRef);
   try {
     await searchAndDeliverBestProjection(run, run.target, request);
   } finally {
@@ -964,12 +1256,16 @@ function buildRopSearchRunRequestOrNull(
   };
 }
 
+// CT-336: the search runs rop_search in the SAME retained session the press
+// uses, so it costs no interpreter start and no cube read, and the press after
+// a search is as fast as any other.
 async function searchAndDeliverBestProjection(
   run: RopSearchRun,
   target: RopPanelTarget,
   request: RopSearchRunRequest,
 ): Promise<void> {
-  const outcome = await searchBestRopProjectionShowingPanelBusy(request, target.raster, {
+  const holder = takeOrCreateSessionHolderForRaster(run.sessionRef, target.raster, run.derived);
+  const outcome = await holder.searchBestProjectionShowingPanelBusy(request, {
     busyRegistrar: run.busyRegistrar,
     viewportIndex: target.viewportIndex,
     stopController: new AbortController(),
@@ -992,8 +1288,8 @@ async function scoreAndDeliverSearchWinner(
   const score = await scoreRolledCandidateOrNull(values, target, run.derived, run.busyRegistrar);
   const winner: RopCandidate = {
     seed: request.seed,
-    values,
-    score,
+    bands: [values],
+    scores: [score],
     searchedProjectionCount: request.projectionCount,
   };
   commitSearchWinner(winner, run.setState);

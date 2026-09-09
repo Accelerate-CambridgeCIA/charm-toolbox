@@ -47,6 +47,7 @@ function buildAllFixtures() {
     paletteColorTiff: buildPaletteColorTiffFixture(),
     untaggedRgbTiff: buildUntaggedRgbTiffFixture(),
     enviStack: buildEnviStackFixture(),
+    enviNirStack: buildEnviNirStackFixture(),
     enviFloatStack: buildEnviFloatStackFixture(),
     maskMultibandPng: buildMaskForMultiBandStackFixture(),
     maskEightBySquarePng: buildMismatchedMaskFixture(),
@@ -69,6 +70,8 @@ function writeAllFixtureFiles(fixtures) {
   writeFixtureFile(fixtures.untaggedRgbTiff.fileName, fixtures.untaggedRgbTiff.bytes);
   writeFixtureFile(fixtures.enviStack.headerFileName, fixtures.enviStack.headerBytes);
   writeFixtureFile(fixtures.enviStack.binaryFileName, fixtures.enviStack.binaryBytes);
+  writeFixtureFile(fixtures.enviNirStack.headerFileName, fixtures.enviNirStack.headerBytes);
+  writeFixtureFile(fixtures.enviNirStack.binaryFileName, fixtures.enviNirStack.binaryBytes);
   writeFixtureFile(fixtures.enviFloatStack.headerFileName, fixtures.enviFloatStack.headerBytes);
   writeFixtureFile(fixtures.enviFloatStack.binaryFileName, fixtures.enviFloatStack.binaryBytes);
   writeFixtureFile(fixtures.maskMultibandPng.fileName, fixtures.maskMultibandPng.bytes);
@@ -556,18 +559,29 @@ const ENVI_WIDTH = 4;
 const ENVI_HEIGHT = 4;
 const ENVI_BAND_BASES = [200, 1000, 1800];
 const ENVI_WAVELENGTHS = [450, 550, 650];
+// CT-351: four-digit wavelengths, so the last spectra x tick label is wide
+// enough to spill past the plot edge unless it is anchored inside.
+const ENVI_NIR_WAVELENGTHS = [900, 1000, 1100];
 const ENVI_DATA_TYPE_UINT16 = 12;
 
 function buildEnviStackFixture() {
+  return buildEnviUint16StackFixture("envi-stack", ENVI_WAVELENGTHS);
+}
+
+function buildEnviNirStackFixture() {
+  return buildEnviUint16StackFixture("envi-nir-stack", ENVI_NIR_WAVELENGTHS);
+}
+
+function buildEnviUint16StackFixture(fileBaseName, wavelengths) {
   const bands = ENVI_BAND_BASES.map(buildEnviRampBandFromBase);
   return {
-    headerFileName: "envi-stack.hdr",
-    binaryFileName: "envi-stack.bin",
+    headerFileName: `${fileBaseName}.hdr`,
+    binaryFileName: `${fileBaseName}.bin`,
     width: ENVI_WIDTH,
     height: ENVI_HEIGHT,
     bands,
-    wavelengths: ENVI_WAVELENGTHS,
-    headerBytes: encodeEnviHeaderBytes(),
+    wavelengths,
+    headerBytes: encodeEnviHeaderBytes(wavelengths),
     binaryBytes: encodeEnviBandSequentialUint16Binary(bands),
   };
 }
@@ -580,7 +594,7 @@ function buildEnviRampBandFromBase(base) {
   return band;
 }
 
-function encodeEnviHeaderBytes() {
+function encodeEnviHeaderBytes(wavelengths) {
   const lines = [
     "ENVI",
     `samples = ${ENVI_WIDTH}`,
@@ -591,7 +605,7 @@ function encodeEnviHeaderBytes() {
     `data type = ${ENVI_DATA_TYPE_UINT16}`,
     "interleave = bsq",
     "byte order = 0",
-    `wavelength = { ${ENVI_WAVELENGTHS.join(", ")} }`,
+    `wavelength = { ${wavelengths.join(", ")} }`,
   ];
   return Buffer.from(`${lines.join("\n")}\n`, "utf-8");
 }
@@ -1252,6 +1266,34 @@ function listBuiltinScriptReferenceRequests(fixtures) {
         },
       },
     },
+    // CT-336: the same seeded 50-candidate search under the CNR objective
+    // (scored INSIDE the resident worker), so the CT-336 e2e can prove the
+    // press -> search -> press sequence costs one interpreter spawn (CNR scores
+    // in TS, so no per-candidate one-shot run) while still pinning the winner.
+    // Every band of multiband-12bit is an affine transform of one ramp, so CNR
+    // scores all 50 candidates near-identically and float noise, not the first
+    // draw, decides the winner: a search that never looped could not match it.
+    ropSearchCnr: {
+      script: "rop_search",
+      fixture: fixtures.multiBandTiff.fileName,
+      maskFixture: fixtures.maskMultibandPng.fileName,
+      params: {
+        seed: ROP_REFERENCE_SEED,
+        count: ROP_SEARCH_REFERENCE_PROJECTION_COUNT,
+        objective: "cnr",
+      },
+      request: {
+        cube: multibandCube,
+        masks: multibandMasks,
+        params: {
+          seed: ROP_REFERENCE_SEED,
+          count: ROP_SEARCH_REFERENCE_PROJECTION_COUNT,
+          objective: "cnr",
+          text_mask_index: 0,
+          background_mask_index: 1,
+        },
+      },
+    },
     l2Minimization: {
       script: "l2_minimization",
       fixture: fixtures.multiBandTiff.fileName,
@@ -1420,6 +1462,7 @@ function buildFixtureManifest(fixtures, builtinScriptReferences) {
     paletteColorTiff: describeRgbFixture(fixtures.paletteColorTiff),
     untaggedRgbTiff: describeRgbFixture(fixtures.untaggedRgbTiff),
     enviStack: describeEnviFixture(fixtures.enviStack),
+    enviNirStack: describeEnviFixture(fixtures.enviNirStack),
     enviFloatStack: describeEnviFloatFixture(fixtures.enviFloatStack),
     maskMultibandPng: describeMaskFixture(fixtures.maskMultibandPng),
     maskEightBySquarePng: describeMaskFixture(fixtures.maskEightBySquarePng),

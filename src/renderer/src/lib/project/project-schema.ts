@@ -72,6 +72,9 @@ export interface ProjectViewportEntry {
   // annotated. selectedMaskIndex is a position into masks, or null.
   readonly masks: ReadonlyArray<ProjectMaskLayer>;
   readonly selectedMaskIndex: number | null;
+  // CT-342: the panel's mask overlay switch. Absent from every bundle written
+  // before it existed, which reads as visible.
+  readonly isOverlayVisible: boolean;
 }
 
 export interface ProjectFile {

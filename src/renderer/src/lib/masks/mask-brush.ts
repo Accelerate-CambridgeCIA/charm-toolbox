@@ -66,6 +66,15 @@ export function resolveMaskBrushPaintValue(
   return clampSelectedMaskCategoryIndex(settings.selectedCategoryIndex, categoryCount);
 }
 
+// While the eraser is on, no category should show pressed: otherwise Radix
+// treats the still-pressed category as already selected, so clicking it again
+// to re-arm painting emits "" (its own toggle-off) instead of the category
+// value, and selectBrushCategoryWhenChosen's "" guard swallows it.
+export function resolveArmedBrushCategoryGroupValue(settings: MaskBrushSettings): string {
+  if (settings.isEraserEnabled) return "";
+  return String(settings.selectedCategoryIndex);
+}
+
 // The width in IMAGE pixels a stamp covers across its centre row: an odd size
 // covers exactly that many pixels, an even size covers one more (size 8 spans
 // 9). The hover ghost draws a circle of this diameter so the user sees the

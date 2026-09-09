@@ -318,6 +318,49 @@ def read_masks_if_present(request, stream):
     return reconstruct_masks_from_frame(mask_bytes, header)
 
 
+# CT-334 session mode: the cube (and masks) are read ONCE at startup and kept
+# as numpy arrays; each execute frame then names a built-in module, its params,
+# and its result spool. Every execute goes through the same handle_request as a
+# one-shot run, so progress/completed/error frames are identical - including
+# re-installing the sandbox per execute, which keeps the one-shot ordering
+# (module load BEFORE its sandbox install) that lets built-ins import siblings
+# at module scope (CT-310). Audit hooks cannot be removed, so they accumulate
+# one per sandboxed execute; each is a few set lookups per audit event, and all
+# of them share _SANDBOX_HARNESS_WRITE_PATHS, so every execute's spool path
+# stays writable under every earlier hook.
+def build_session_execute_request(base_request, frame):
+    builtin = frame.get("builtin") if isinstance(frame.get("builtin"), dict) else {}
+    request = dict(base_request)
+    request["input"] = {
+        "kind": "builtin",
+        "directory": builtin.get("directory", ""),
+        "moduleName": builtin.get("moduleName", ""),
+    }
+    request["params"] = frame.get("params")
+    request["cubeResultSpoolPath"] = frame.get("cubeResultSpoolPath")
+    return request
+
+
+def answer_one_session_execute(base_request, frame, cube, masks):
+    if not isinstance(frame, dict) or frame.get("type") != "execute":
+        write_response_frame(encode_response({"type": "script-error", "message": "Malformed session execute frame."}))
+        return
+    # Each execute's progress bar starts at 0: the rate limiter must not carry
+    # the previous execute's last reported fraction across runs.
+    _last_reported_progress[0] = None
+    request = build_session_execute_request(base_request, frame)
+    for frame_payload in handle_request(request, cube, masks):
+        write_response_frame(frame_payload)
+
+
+def run_session_loop(base_request, cube, masks):
+    while True:
+        payload = read_frame_payload(sys.stdin.buffer)
+        if payload is None:
+            return
+        answer_one_session_execute(base_request, json.loads(payload.decode("utf-8")), cube, masks)
+
+
 def main():
     request_payload = read_frame_payload(sys.stdin.buffer)
     if request_payload is None:
@@ -328,6 +371,9 @@ def main():
         masks = read_masks_if_present(request, sys.stdin.buffer)
     except BaseException as error:
         write_response_frame(encode_response({"type": "script-error", "message": str(error)}))
+        return
+    if isinstance(request, dict) and request.get("mode") == "session":
+        run_session_loop(request, cube, masks)
         return
     for frame_payload in handle_request(request, cube, masks):
         write_response_frame(frame_payload)

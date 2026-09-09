@@ -2,7 +2,11 @@ import {
   applyActionToDuplicateOfSource,
   type ApplyActionFlowBindings,
 } from "@/lib/actions/apply-action-flow";
-import { buildRopKeepAction, type RopKeepRequest } from "@/lib/actions/rop-keep-action";
+import {
+  buildRopDeliveryParameterValues,
+  buildRopKeepAction,
+  type RopKeepRequest,
+} from "@/lib/actions/rop-keep-action";
 import { findLowestIndexEmptyViewport } from "@/lib/image/find-empty-viewport";
 import { getNextLargerGridLayout } from "@/lib/grid/grid-layout";
 import { notifyError } from "@/lib/notifications/notify";
@@ -25,7 +29,12 @@ export function keepRopCandidateAsNewStack(
     notifyError(ROP_KEEP_NEEDS_A_FREE_PANEL_MESSAGE);
     return;
   }
-  applyActionToDuplicateOfSource(buildRopKeepAction(request), {}, sourceIndex, bindings);
+  applyActionToDuplicateOfSource(
+    buildRopKeepAction(request),
+    buildRopDeliveryParameterValues(request),
+    sourceIndex,
+    bindings,
+  );
 }
 
 // Mirrors the duplicate-apply flow's own search (lowest free panel respecting

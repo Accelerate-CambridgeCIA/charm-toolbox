@@ -45,6 +45,10 @@ export type UserScriptResultKind = "value" | "cube";
 
 export interface RunUserScriptRequest {
   type: "run-user-script";
+  // CT-334: "session" makes the worker read the cube (and mask) frame once,
+  // then loop answering execute frames from stdin until EOF instead of running
+  // the request's input and exiting. Absent (the default) is the one-shot mode.
+  mode?: "session";
   input: UserScriptInput;
   cube: CubePayloadHeader | null;
   // CT-307: when non-null, ONE raw uint8 frame of count*height*width mask
@@ -123,6 +127,23 @@ export function encodeCubeFrameLengthPrefix(payloadByteLength: number): Buffer {
 
 export function encodeWorkerRequestFrame(request: RunUserScriptRequest): Buffer {
   const payload = Buffer.from(JSON.stringify(request), "utf8");
+  return Buffer.concat([encodeJsonFrameLengthPrefix(payload.length), payload]);
+}
+
+// CT-334: one run inside an open session. The frame names the built-in module
+// to load, its params, and where to spool a cube result; the session's cube and
+// masks were already delivered by the opening request, so no bulk bytes follow.
+export interface SessionExecuteFrame {
+  type: "execute";
+  params: JsonValue | null;
+  cubeResultSpoolPath: string | null;
+  builtin: { directory: string; moduleName: string };
+}
+
+// Same 4-byte uint32 length prefix as the request frame; the session loop in
+// worker-bootstrap.ts reads it with the same read_frame_payload.
+export function encodeSessionExecuteFrame(frame: SessionExecuteFrame): Buffer {
+  const payload = Buffer.from(JSON.stringify(frame), "utf8");
   return Buffer.concat([encodeJsonFrameLengthPrefix(payload.length), payload]);
 }
 

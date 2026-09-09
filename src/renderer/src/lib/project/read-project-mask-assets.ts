@@ -1,5 +1,5 @@
 import { decodeMaskPngBytes } from "@/lib/masks/mask-png-decode";
-import type { MaskPanelState } from "@/lib/masks/mask-panel";
+import { setMaskOverlayVisibility, type MaskPanelState } from "@/lib/masks/mask-panel";
 
 import {
   buildMaskPanelStateFromRestoredLayers,
@@ -31,7 +31,8 @@ export async function readMaskPanelStateForViewportEntry(
   for (const manifest of entry.masks) {
     restored.push(await readOneMaskLayerOrThrow(projectFilePath, manifest, api));
   }
-  return buildMaskPanelStateFromRestoredLayers(restored, entry.selectedMaskIndex);
+  const panel = buildMaskPanelStateFromRestoredLayers(restored, entry.selectedMaskIndex);
+  return setMaskOverlayVisibility(panel, entry.isOverlayVisible);
 }
 
 async function readOneMaskLayerOrThrow(

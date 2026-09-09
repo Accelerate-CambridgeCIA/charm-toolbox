@@ -19,6 +19,11 @@ import { useViewportRendering } from "@/state/viewport-rendering-context";
 // what uploads the cube, runs the worker, and opens the transformed stack;
 // see custom-transform-action.ts.
 
+// Wallace (CT-349) read the cube as (height, width, bands) and chased phantom
+// bugs; the panel now names the band-major order the scripting doc uses.
+export const CUBE_SHAPE_NOTE =
+  "cube is a NumPy array shaped (bands, height, width): cube[k] is band k as a height-by-width picture.";
+
 interface ToolOptionsCustomTransformEditorProps {
   viewportIndex: number;
 }
@@ -37,6 +42,7 @@ export function ToolOptionsCustomTransformEditor(
         and width as the source; the band count is free. Apply runs it on the stack and opens
         the result.
       </p>
+      <p className="text-xs text-muted-foreground">{CUBE_SHAPE_NOTE}</p>
     </div>
   );
 }

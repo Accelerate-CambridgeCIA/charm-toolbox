@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { RasterImage } from "@/lib/image/raster-image";
+import { listRasterBandOriginalNumbers, type RasterImage } from "@/lib/image/raster-image";
 import { duplicateRasterBands } from "./duplicate-bands";
 
 function buildRaster(options: {
@@ -39,7 +39,7 @@ describe("duplicateRasterBands", () => {
     expect(raster.bandPixels[0]?.[0]).toBe(10);
   });
 
-  it("copies wavelength and original band number, leaves originals untouched", () => {
+  it("copies wavelength, leaves originals untouched, and renumbers the result sequentially", () => {
     const raster = buildRaster({
       bandFillValues: [10, 20],
       bandWavelengths: [400, 700],
@@ -47,7 +47,15 @@ describe("duplicateRasterBands", () => {
     });
     const result = duplicateRasterBands(raster, [1]);
     expect(result.bandWavelengths).toEqual([400, 700, 700]);
-    expect(result.bandOriginalNumbers).toEqual([1, 2, 2]);
+    expect(result.bandOriginalNumbers).toBeUndefined();
+    expect(listRasterBandOriginalNumbers(result)).toEqual([1, 2, 3]);
+  });
+
+  it("renumbers a 3-band raster with band 1 duplicated as [1,2,3,4]", () => {
+    const raster = buildRaster({ bandFillValues: [10, 20, 30] });
+    const result = duplicateRasterBands(raster, [0]);
+    expect(result.bandOriginalNumbers).toBeUndefined();
+    expect(listRasterBandOriginalNumbers(result)).toEqual([1, 2, 3, 4]);
   });
 
   it("labels a duplicate as the source band's label plus ' copy', explicit or default", () => {

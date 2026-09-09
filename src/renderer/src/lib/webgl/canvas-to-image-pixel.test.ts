@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  convertCanvasPixelToImagePixelClamped,
   convertCanvasPixelToImagePixelOrNull,
   convertImagePixelToCanvasPointOrNull,
 } from "./canvas-to-image-pixel";
@@ -72,6 +73,70 @@ describe("convertCanvasPixelToImagePixelOrNull", () => {
 
   it("returns null when the display has zero area", () => {
     const result = convertCanvasPixelToImagePixelOrNull({
+      canvasPointPx: { x: 0, y: 0 },
+      displaySize: { width: 0, height: 0 },
+      imageSize: { width: 100, height: 100 },
+      fitScale: IDENTITY_FIT_SCALE,
+      userZoom: IDENTITY_ZOOM,
+      userPan: IDENTITY_PAN,
+    });
+    expect(result).toBeNull();
+  });
+});
+
+describe("convertCanvasPixelToImagePixelClamped", () => {
+  it("clamps a point beyond the right edge to the last column", () => {
+    const result = convertCanvasPixelToImagePixelClamped({
+      canvasPointPx: { x: 140, y: 50 },
+      displaySize: { width: 100, height: 100 },
+      imageSize: { width: 200, height: 100 },
+      fitScale: IDENTITY_FIT_SCALE,
+      userZoom: IDENTITY_ZOOM,
+      userPan: IDENTITY_PAN,
+    });
+    expect(result).toEqual({ x: 199, y: 50 });
+  });
+
+  it("clamps a point beyond the left edge to the first column", () => {
+    const result = convertCanvasPixelToImagePixelClamped({
+      canvasPointPx: { x: -40, y: 50 },
+      displaySize: { width: 100, height: 100 },
+      imageSize: { width: 200, height: 100 },
+      fitScale: IDENTITY_FIT_SCALE,
+      userZoom: IDENTITY_ZOOM,
+      userPan: IDENTITY_PAN,
+    });
+    expect(result).toEqual({ x: 0, y: 50 });
+  });
+
+  it("clamps a point beyond the bottom edge to the last row", () => {
+    const result = convertCanvasPixelToImagePixelClamped({
+      canvasPointPx: { x: 50, y: 95 },
+      displaySize: { width: 100, height: 100 },
+      imageSize: { width: 200, height: 100 },
+      fitScale: { x: 1, y: 0.5 },
+      userZoom: IDENTITY_ZOOM,
+      userPan: IDENTITY_PAN,
+    });
+    expect(result).toEqual({ x: 100, y: 99 });
+  });
+
+  it("maps an inside point identically to the OrNull variant", () => {
+    const inputs = {
+      canvasPointPx: { x: 50, y: 50 },
+      displaySize: { width: 100, height: 100 },
+      imageSize: { width: 200, height: 100 },
+      fitScale: IDENTITY_FIT_SCALE,
+      userZoom: IDENTITY_ZOOM,
+      userPan: IDENTITY_PAN,
+    };
+    expect(convertCanvasPixelToImagePixelClamped(inputs)).toEqual(
+      convertCanvasPixelToImagePixelOrNull(inputs),
+    );
+  });
+
+  it("returns null when the display has zero area", () => {
+    const result = convertCanvasPixelToImagePixelClamped({
       canvasPointPx: { x: 0, y: 0 },
       displaySize: { width: 0, height: 0 },
       imageSize: { width: 100, height: 100 },

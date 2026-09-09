@@ -103,6 +103,7 @@ export interface SaveBundleViewportHeaderEntry {
   readonly colorInterpretation?: "rgb";
   readonly masks?: ReadonlyArray<SaveBundleMaskLayerDescriptor>;
   readonly selectedMaskIndex?: number | null;
+  readonly isOverlayVisible?: boolean;
 }
 
 export interface SaveBundleDraftHeader {

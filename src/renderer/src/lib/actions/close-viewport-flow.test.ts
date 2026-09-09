@@ -12,7 +12,7 @@ import {
   releaseQueuedRasterBuffersSkippingShared,
   resetRasterBufferReleaseStateForTests,
 } from "@/lib/image/raster-buffer-release";
-import { buildErrorToastOptions } from "@/lib/notifications/toast-options";
+import { buildTransientErrorToastOptions } from "@/lib/notifications/toast-options";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
@@ -114,7 +114,7 @@ describe("close-viewport-flow buffer release (CT-290)", () => {
     flushReleasesTreatingContentsAsLive([]);
     expect(band.buffer.byteLength).toBe(8);
     expect(harness.bindings.setImagesByIndex).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("Rotate"), buildErrorToastOptions());
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("Rotate"), buildTransientErrorToastOptions());
     reservation.release();
   });
 });

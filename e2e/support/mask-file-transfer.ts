@@ -40,6 +40,26 @@ export async function importMasksFromPaths(
   });
 }
 
+// CT-332: "Add category from file" is the second picker in the aside; it adds
+// every picked PNG as a category of the SELECTED layer instead of a new layer.
+export function addMaskCategoryFromFileButton(page: Page): Locator {
+  return masksOptionsPanel(page).getByRole("button", {
+    name: "Add category from file",
+    exact: true,
+  });
+}
+
+export async function addMaskCategoriesFromPaths(
+  page: Page,
+  maskFilePaths: ReadonlyArray<string>,
+): Promise<void> {
+  const label = `Add a category from each of ${maskFilePaths.length} picked files`;
+  await runAsStoryboardStep(page, label, async () => {
+    await enqueueOpenDialogPaths(page, maskFilePaths);
+    await addMaskCategoryFromFileButton(page).click();
+  });
+}
+
 export async function exportSelectedMaskToZipPath(
   page: Page,
   destinationPath: string,

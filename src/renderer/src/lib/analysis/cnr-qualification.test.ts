@@ -18,7 +18,7 @@ function buildLayerPaintedWith(id: string, painted: ReadonlyArray<number>): Mask
 }
 
 function buildPanelOfLayers(layers: ReadonlyArray<MaskLayer>): MaskPanelState {
-  return { layers, selectedLayerId: layers[0]?.id ?? null };
+  return { layers, selectedLayerId: layers[0]?.id ?? null, isOverlayVisible: true };
 }
 
 describe("doesMaskLayerQualifyForCnr", () => {

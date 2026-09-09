@@ -10,6 +10,9 @@
 #   at a time, so a search seeded with S explores exactly the same projections
 #   rop.py would draw with seed S and count N, and the best band is bit-identical
 #   to that candidate.
+# - CT-336: like rop.py, this projects the band-major cube directly (no
+#   np.transpose), so the only cube in the worker is the resident one and each
+#   candidate allocates only its own output band.
 # - The objective is chosen by params["objective"]: "npc" delegates to the
 #   packaged npc.py, "cnr" is the locked contrast-to-noise formula (population
 #   standard deviation, ddof = 0, mirroring the app's TS implementation), and
@@ -39,8 +42,7 @@ def run(cube, wavelengths, params):
     count = read_projection_count(params)
     rng = np.random.default_rng(int(params["seed"]))
     score_candidate = build_objective_scorer(wavelengths, params)
-    image = np.transpose(cube, (1, 2, 0))
-    best = search_best_scoring_projection(image, count, rng, score_candidate, report_progress)
+    best = search_best_scoring_projection(cube, count, rng, score_candidate, report_progress)
     return np.stack([best], axis=0)
 
 
@@ -51,11 +53,11 @@ def read_projection_count(params):
     return count
 
 
-def search_best_scoring_projection(image, count, rng, score_candidate, report_progress):
+def search_best_scoring_projection(cube, count, rng, score_candidate, report_progress):
     best_band = None
     best_score = None
     for index in range(count):
-        band = project_one_candidate(image, rng)
+        band = project_one_candidate(cube, rng)
         score = score_candidate(band)
         if np.isfinite(score) and (best_score is None or score > best_score):
             best_band, best_score = band, score
@@ -67,9 +69,9 @@ def search_best_scoring_projection(image, count, rng, score_candidate, report_pr
 
 # One candidate through rop.py's own functions, so the search and a single
 # press draw identical projections from identical generator states.
-def project_one_candidate(image, rng):
-    projections = rop.randOrth(image.shape[2], 1, 1, rng)
-    return rop.dimReduction(image, projections)[0][:, :, 0]
+def project_one_candidate(cube, rng):
+    projections = rop.randOrth(cube.shape[0], 1, 1, rng)
+    return rop.dimReduction(cube, projections)[0][:, :, 0]
 
 
 def build_objective_scorer(wavelengths, params):

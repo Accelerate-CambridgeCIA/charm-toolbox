@@ -34,7 +34,7 @@ import {
   STANDARDIZE_ACTION,
   TONE_CURVE_ACTION,
 } from "./registered-actions";
-import { buildRopKeepAction } from "./rop-keep-action";
+import { buildRopDeliveryParameterValues, buildRopKeepAction } from "./rop-keep-action";
 import { SPATIAL_FILTER_ACTION } from "./spatial-filter-action";
 import { SPECTRAL_DERIVATIVE_ACTION } from "./spectral-derivative-action";
 import { THRESHOLD_ACTION } from "./threshold-action";
@@ -186,13 +186,31 @@ describe("estimateApplyAllocationBytesForAction", () => {
   it("bills a kept ROP projection exactly one float band at source dimensions (CT-309)", () => {
     const keepAction = buildRopKeepAction({
       seed: 1,
-      values: new Float32Array(PIXELS),
+      bands: [new Float32Array(PIXELS)],
       width: WIDTH,
       height: HEIGHT,
       score: null,
       objectiveLabel: null,
     });
     expect(estimateApplyAllocationBytesForAction(keepAction, uint16Source(), {})).toBe(PIXELS * 4);
+  });
+
+  // CT-337: a press can deliver a whole batch, and the delivery states how many
+  // bands it places so the preflight prices all of them.
+  it("bills a delivered ROP batch one float band per projection (CT-337)", () => {
+    const request = {
+      seed: 1,
+      bands: [new Float32Array(PIXELS), new Float32Array(PIXELS), new Float32Array(PIXELS)],
+      width: WIDTH,
+      height: HEIGHT,
+      score: null,
+      objectiveLabel: null,
+    };
+    const action = buildRopKeepAction(request);
+    const values = buildRopDeliveryParameterValues(request);
+    expect(estimateApplyAllocationBytesForAction(action, uint16Source(), values)).toBe(
+      PIXELS * 4 * 3,
+    );
   });
 
   it("bills L2 minimization exactly one float band at source dimensions (CT-313)", () => {

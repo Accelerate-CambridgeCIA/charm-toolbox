@@ -33,8 +33,10 @@ export async function readHistogramCountAxisLabels(page: Page): Promise<string[]
   return readSpanTextsWithin(histogramCountAxisLabelsColumn(page));
 }
 
+// SVG <text> nodes have no innerText (allInnerTexts yields undefined for each), so the
+// spectra ticks are read through textContent (CT-351).
 export async function readSpectraPlotAxisLabels(page: Page): Promise<string[]> {
-  return spectraPlot(page).locator("text").allInnerTexts();
+  return spectraPlot(page).locator("text").allTextContents();
 }
 
 async function readSpanTextsWithin(column: Locator): Promise<string[]> {

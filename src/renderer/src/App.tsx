@@ -45,6 +45,7 @@ import {
 import {
   RopOptionsPanel,
   type RopPanelTarget,
+  type RopRepinOffer,
 } from "@/components/rop-options-panel";
 import {
   buildRopCandidateDeliveryPort,
@@ -53,6 +54,7 @@ import {
 import { keepRopCandidateAsNewStack } from "@/lib/analysis/rop-keep-flow";
 import {
   hasPinnedRopPanelLostItsRaster,
+  repinRopToSelection,
   resolveNextRopPin,
   type RopPinnedPanel,
   type RopPinSelection,
@@ -183,7 +185,7 @@ import {
   planOpenImagesPlacement,
   type OpenImagesPlacementPlan,
 } from "@/lib/grid/plan-open-images";
-import { notifyError, notifySuccess } from "@/lib/notifications/notify";
+import { notifyError, notifyPersistentError, notifySuccess } from "@/lib/notifications/notify";
 import { coerceViewportSourceToRasterSource } from "@/lib/image/promote-source-to-raster";
 import { shouldRenderRasterAsRgbComposite } from "@/lib/image/raster-color-interpretation";
 import {
@@ -263,7 +265,7 @@ import {
   RegionToolProvider,
   useRegionTool,
 } from "@/state/region-tool-context";
-import { MasksToolProvider, useMasksTool } from "@/state/masks-tool-context";
+import { MasksToolProvider, useMasksTool, type MasksToolApi } from "@/state/masks-tool-context";
 import {
   RegionRequestProvider,
   useRegionRequest,
@@ -320,7 +322,12 @@ import {
 } from "@/lib/actions/viewport-action";
 import { NO_PARAMETER_VALUES, type ParameterValuesById } from "@/lib/actions/parameter-schema";
 import { appendOperationHistoryEntry } from "@/lib/actions/operation-history";
-import type { MaskPanelState } from "@/lib/masks/mask-panel";
+import { showMaskOverlayWhenOpeningMasksTool, type MaskPanelState } from "@/lib/masks/mask-panel";
+import {
+  closeRightSidePanelsCompetingWith,
+  type RightSidePanelClosers,
+  type RightSidePanelId,
+} from "@/lib/actions/right-side-panels";
 import type { MaskBrushSettings } from "@/lib/masks/mask-brush";
 import { getImageSourceDimensions } from "@/lib/webgl/texture";
 
@@ -504,6 +511,7 @@ function ApplicationShell(): JSX.Element {
     ? resolveNextRopPin(pinnedRopPanel, toRopPinSelectionOrNull(singleSelectedSource), imagesByIndex)
     : null;
   useRopPinRetainedAcrossSelectionChanges(ropPin, pinnedRopPanel, setPinnedRopPanel);
+  const ropRepinTarget = deriveRopRepinTargetOrNull(ropPin, singleSelectedSource, imagesByIndex);
   useRopAsideClosedWithItsPinnedPanel({
     isRopPanelOpen,
     pinnedRopPanel,
@@ -542,6 +550,12 @@ function ApplicationShell(): JSX.Element {
     regionRequest,
     renderingApi,
     setActiveAction,
+    closeOtherRightSidePanels: {
+      closeNpcPanel: () => setIsNpcPanelOpen(false),
+      closeCnrPanel: () => setIsCnrPanelOpen(false),
+      closeRopPanel: () => setIsRopPanelOpen(false),
+      closeMasksTool: () => masksTool.setMasksToolActive(false),
+    },
   });
   const handleApplyAction = (options: ToolOptionsApplyOptions) => {
     regionRequest.endRegionRequest();
@@ -549,24 +563,35 @@ function ApplicationShell(): JSX.Element {
   };
   const operationCommandHandlers = buildOperationCommandHandlers({
     regionTool,
-    masksTool,
+    masksTool: {
+      toggleMasksTool: () =>
+        toggleMasksToolClosingCompetingPanels(
+          masksTool,
+          singleSelectedSource?.index ?? null,
+          renderingApi,
+          regionRequestHandlers.rightSidePanelClosers,
+        ),
+    },
     bandSubsetToggle: deriveBandSubsetToggleStateForToolbar(singleSelectedSource, imagesByIndex, renderingApi),
     openActionPanel: regionRequestHandlers.openActionPanel,
     openNpcPanel: () =>
-      openAnalysisPanelClosingCompetingPanels(regionRequestHandlers, setIsNpcPanelOpen, [
-        setIsCnrPanelOpen,
-        setIsRopPanelOpen,
-      ]),
+      openAnalysisPanelClosingCompetingPanels(
+        "npc",
+        regionRequestHandlers.rightSidePanelClosers,
+        setIsNpcPanelOpen,
+      ),
     openCnrPanel: () =>
-      openAnalysisPanelClosingCompetingPanels(regionRequestHandlers, setIsCnrPanelOpen, [
-        setIsNpcPanelOpen,
-        setIsRopPanelOpen,
-      ]),
-    openRopPanel: () =>
-      openAnalysisPanelClosingCompetingPanels(regionRequestHandlers, setIsRopPanelOpen, [
-        setIsNpcPanelOpen,
+      openAnalysisPanelClosingCompetingPanels(
+        "cnr",
+        regionRequestHandlers.rightSidePanelClosers,
         setIsCnrPanelOpen,
-      ]),
+      ),
+    openRopPanel: () =>
+      openAnalysisPanelClosingCompetingPanels(
+        "rop",
+        regionRequestHandlers.rightSidePanelClosers,
+        setIsRopPanelOpen,
+      ),
     singleSelectedSource,
     applyActionFlowBindings,
   });
@@ -675,6 +700,10 @@ function ApplicationShell(): JSX.Element {
                 onCloseCnrPanel={() => setIsCnrPanelOpen(false)}
                 isRopPanelOpen={isRopPanelOpen}
                 ropTarget={deriveRopPanelTargetOrNull(ropPin, renderingApi)}
+                ropRepinOffer={{
+                  selectedPanelNumber: ropRepinTarget?.viewportNumber ?? null,
+                  onUseSelectedPanel: () => setPinnedRopPanel(ropRepinTarget),
+                }}
                 ropCandidateDelivery={buildRopCandidateDeliveryPort(
                   ropPin?.viewportIndex ?? null,
                   applyActionFlowBindings,
@@ -793,6 +822,7 @@ interface ApplicationStageContentProps {
   onCloseCnrPanel: () => void;
   isRopPanelOpen: boolean;
   ropTarget: RopPanelTarget | null;
+  ropRepinOffer: RopRepinOffer;
   ropCandidateDelivery: RopCandidateDeliveryPort;
   onKeepRopCandidateAsNewStack: (request: RopKeepRequest) => void;
   onCloseRopPanel: () => void;
@@ -844,6 +874,7 @@ function renderActiveRightSidePanel(props: ApplicationStageContentProps): JSX.El
       <RopOptionsPanel
         target={props.ropTarget}
         candidateDelivery={props.ropCandidateDelivery}
+        repinOffer={props.ropRepinOffer}
         onKeepCandidateAsNewStack={props.onKeepRopCandidateAsNewStack}
         onClose={props.onCloseRopPanel}
       />
@@ -946,6 +977,19 @@ function deriveRopPanelTargetOrNull(
   };
 }
 
+// CT-333: the offer behind "Use selected panel". It is the repin the button
+// WOULD make, and null whenever that press would change nothing: no single
+// panel selected, the selected panel holds no raster, or it is already pinned.
+function deriveRopRepinTargetOrNull(
+  ropPin: RopPinnedPanel | null,
+  singleSelectedSource: SingleSelectedSource | null,
+  imagesByIndex: ImagesByIndexMap,
+): RopPinnedPanel | null {
+  const selection = toRopPinSelectionOrNull(singleSelectedSource);
+  const repinned = repinRopToSelection(ropPin, selection, imagesByIndex);
+  return repinned === ropPin ? null : repinned;
+}
+
 function toRopPinSelectionOrNull(
   singleSelectedSource: SingleSelectedSource | null,
 ): RopPinSelection | null {
@@ -1030,6 +1074,35 @@ function writeMaskPanelStateAtViewport(
   if (viewportIndex === null) return;
   const previous = renderingApi.getRenderingState(viewportIndex);
   renderingApi.setRenderingState(viewportIndex, { ...previous, masks });
+}
+
+// CT-344: opening the Masks tool shows the active panel's overlay, so a user
+// who had hidden it never opens the tool onto a blank canvas. Closing the
+// tool leaves every panel's flag exactly as it is.
+function toggleMasksToolShowingActivePanelOverlay(
+  masksTool: MasksToolApi,
+  activeViewportIndex: number | null,
+  renderingApi: ViewportRenderingApi,
+): void {
+  if (activeViewportIndex !== null) {
+    const previous = renderingApi.getRenderingState(activeViewportIndex);
+    const masks = showMaskOverlayWhenOpeningMasksTool(previous.masks, masksTool.isMasksToolActive);
+    if (masks !== previous.masks) writeMaskPanelStateAtViewport(activeViewportIndex, masks, renderingApi);
+  }
+  masksTool.toggleMasksTool();
+}
+
+// CT-345: turning the Masks tool ON closes every competing right-side panel;
+// turning it OFF closes nothing and never discards mask layers or visibility
+// flags, which live in per-panel rendering state rather than in the tool.
+function toggleMasksToolClosingCompetingPanels(
+  masksTool: MasksToolApi,
+  activeViewportIndex: number | null,
+  renderingApi: ViewportRenderingApi,
+  closers: RightSidePanelClosers,
+): void {
+  if (!masksTool.isMasksToolActive) closeRightSidePanelsCompetingWith("masks", closers);
+  toggleMasksToolShowingActivePanelOverlay(masksTool, activeViewportIndex, renderingApi);
 }
 
 function buildActiveOperationEmbeddedEditorOrNull(
@@ -1875,7 +1948,7 @@ function reportDuplicateExceedsMemoryBudget(
   if (!rasterAllocationExceedsMemoryBudget(estimateSourceCloneBytes(sourceContent.source), liveBytes)) {
     return false;
   }
-  notifyError(`Could not duplicate ${sourceContent.fileName}: ${DUPLICATE_MEMORY_REFUSAL_MESSAGE}`);
+  notifyPersistentError(`Could not duplicate ${sourceContent.fileName}: ${DUPLICATE_MEMORY_REFUSAL_MESSAGE}`);
   return true;
 }
 
@@ -2107,7 +2180,13 @@ async function replaceViewportSourceWithReimportedFile(
     );
     notifySuccess(`Re-imported ${file.fileName}`);
   } catch (error) {
-    notifyError(`Could not re-import ${file.fileName}: ${describeUnknownError(error)}`);
+    const message = `Could not re-import ${file.fileName}: ${describeUnknownError(error)}`;
+    const errorText = describeUnknownError(error);
+    if (errorText.includes("not enough memory")) {
+      notifyPersistentError(message);
+    } else {
+      notifyError(message);
+    }
   } finally {
     handle.clear();
   }
@@ -2118,6 +2197,7 @@ interface ToolPanelRegionRequestHandlerInputs {
   readonly regionRequest: RegionRequestApi;
   readonly renderingApi: ViewportRenderingApi;
   readonly setActiveAction: SetActiveAction;
+  readonly closeOtherRightSidePanels: Omit<RightSidePanelClosers, "closeActionPanel">;
 }
 
 interface ToolPanelRegionRequestHandlers {
@@ -2125,19 +2205,19 @@ interface ToolPanelRegionRequestHandlers {
   readonly closeActionPanel: () => void;
   readonly beginRegionRequest: () => void;
   readonly clearOperationRegion: () => void;
+  readonly rightSidePanelClosers: RightSidePanelClosers;
 }
 
-// CT-308/CT-309: the analysis asides and the tool-options panel compete for
-// the same right-side slot, so opening one from the menu closes any open
-// operation panel (and its pending region request) AND the other analysis
-// aside instead of hiding behind either.
+// CT-308/CT-309/CT-345: the operation panel, the analysis asides and the Masks
+// options aside all compete for the same right-side slot, so opening any one
+// of them closes every other one (and any pending region request) instead of
+// hiding behind it.
 function openAnalysisPanelClosingCompetingPanels(
-  regionRequestHandlers: ToolPanelRegionRequestHandlers,
+  opened: RightSidePanelId,
+  closers: RightSidePanelClosers,
   setThisPanelOpen: (open: boolean) => void,
-  setCompetingPanelsOpen: ReadonlyArray<(open: boolean) => void>,
 ): void {
-  regionRequestHandlers.closeActionPanel();
-  for (const setCompetingPanelOpen of setCompetingPanelsOpen) setCompetingPanelOpen(false);
+  closeRightSidePanelsCompetingWith(opened, closers);
   setThisPanelOpen(true);
 }
 
@@ -2149,6 +2229,16 @@ function buildToolPanelRegionRequestHandlers(
     closeActionPanel: () => closeToolPanelClearingAnyRegionRequest(inputs),
     beginRegionRequest: () => beginOperationRegionRequestForActiveSource(inputs),
     clearOperationRegion: () => clearOperationRegionOnActiveSource(inputs),
+    rightSidePanelClosers: buildRightSidePanelClosers(inputs),
+  };
+}
+
+function buildRightSidePanelClosers(
+  inputs: ToolPanelRegionRequestHandlerInputs,
+): RightSidePanelClosers {
+  return {
+    closeActionPanel: () => closeToolPanelClearingAnyRegionRequest(inputs),
+    ...inputs.closeOtherRightSidePanels,
   };
 }
 
@@ -2156,6 +2246,7 @@ function openToolPanelClearingAnyRegionRequest(
   action: RegisteredViewportAction,
   inputs: ToolPanelRegionRequestHandlerInputs,
 ): void {
+  closeRightSidePanelsCompetingWith("action", buildRightSidePanelClosers(inputs));
   inputs.regionRequest.endRegionRequest();
   clearTransientOperationStateOnActiveSource(inputs);
   inputs.setActiveAction(action);

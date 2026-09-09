@@ -15,8 +15,30 @@ export function drawRopSeed(
   return Math.floor(drawRandomUnitInterval() * ROP_SEED_EXCLUSIVE_UPPER_BOUND);
 }
 
-export function buildRopExecuteParams(seed: number): Record<string, unknown> {
-  return { seed, count: 1 };
+// CT-337: one press can draw several projections. rop.py already returns
+// params["count"] bands, so the whole batch costs one round trip.
+export const MIN_ROP_PROJECTIONS_PER_PRESS = 1;
+export const MAX_ROP_PROJECTIONS_PER_PRESS = 20;
+export const DEFAULT_ROP_PROJECTIONS_PER_PRESS = 1;
+
+export const ROP_PROJECTIONS_PER_PRESS_HINT =
+  `Enter a whole number from ${MIN_ROP_PROJECTIONS_PER_PRESS} to ${MAX_ROP_PROJECTIONS_PER_PRESS}.`;
+
+// Mirrors parseRopSearchProjectionCountOrNull: the field keeps the text as
+// typed, and null means "not a usable count yet", which blocks the press.
+export function parseRopProjectionsPerPressOrNull(countText: string): number | null {
+  const trimmed = countText.trim();
+  if (!/^[0-9]+$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  if (parsed < MIN_ROP_PROJECTIONS_PER_PRESS) return null;
+  return parsed <= MAX_ROP_PROJECTIONS_PER_PRESS ? parsed : null;
+}
+
+export function buildRopExecuteParams(
+  seed: number,
+  projectionCount: number,
+): Record<string, unknown> {
+  return { seed, count: projectionCount };
 }
 
 interface WindowCarryingRopSeedOverride {

@@ -18,6 +18,7 @@ import {
   type PixelDimensions,
   typeSubsetBandsDuplicateRange,
 } from "./support/page-objects";
+import { panelHeaderLabel } from "./support/panel-header-label";
 
 // CT-301: the Subset Bands editor's "Duplicate" mode appends copies of the
 // typed bands to the end of the stack. Duplicating band 1 of the 3-band
@@ -57,6 +58,9 @@ test("duplicates band 1 to the end of the stack, in place", async () => {
   expect(metadata.bandCount).toBe("4");
 
   await selectActiveBandNumberInPanel(page, PANEL, 4);
+  // CT-341: the duplicated band renumbers to its position (4), not the source
+  // band's original number (1) it copied from.
+  await expect(panelHeaderLabel(page, PANEL)).toHaveAttribute("title", /- #4 Band 1 copy$/);
   await expectPixelReadoutToEqual(page, {
     panel: PANEL,
     imageX: 0,

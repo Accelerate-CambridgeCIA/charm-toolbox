@@ -34,7 +34,7 @@ test.afterEach(async () => {
   await closeToolboxApp(launched);
 });
 
-test("a memory-refusal error toast outlives auto-dismiss and closes via its close button", async () => {
+test("a memory-refusal error toast outlives auto-dismiss and closes via its Dismiss button", async () => {
   const page = launched.window;
   await enqueueAndTriggerOpenImages(page, [fixturePath(multiBandTiff.fileName)]);
 
@@ -52,8 +52,8 @@ test("a memory-refusal error toast outlives auto-dismiss and closes via its clos
     await expect(refusalToast).toBeVisible();
   });
 
-  await runAsStoryboardStep(page, "The close button dismisses the toast", async () => {
-    await refusalToast.getByLabel("Close toast").click();
+  await runAsStoryboardStep(page, "The Dismiss button dismisses the toast", async () => {
+    await refusalToast.getByRole("button", { name: "Dismiss" }).click();
     await expect(refusalToast).toBeHidden();
   });
 });

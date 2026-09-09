@@ -24,6 +24,20 @@
 // unit-testable without a Python runtime) and interpolated into the Python source.
 
 export const PYTHON_SANDBOX_ALLOWED_IMPORT_ROOTS = [
+  // CT-336: the app's own packaged Stage 6 algorithm modules are part of the
+  // trusted bundled stack. rop_search imports its siblings (rop, npc) at module
+  // scope, and in a RESIDENT SESSION a later execute loads its module while an
+  // earlier execute's audit hook is still live (hooks are irremovable), so the
+  // module-load-before-sandbox ordering no longer shields that sibling import.
+  // Allowlisting them keeps a cross-execute sibling import working; a plain user
+  // run cannot reach them anyway, since the built-in directory is only on
+  // sys.path while a built-in module runs.
+  "npc",
+  "rop",
+  "rop_search",
+  "local_pca",
+  "local_mnf",
+  "l2_minimization",
   "numpy",
   "scipy",
   "skimage",

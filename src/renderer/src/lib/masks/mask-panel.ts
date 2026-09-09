@@ -8,16 +8,51 @@ import {
 // CT-302: a panel holds any number of mask layers (no fixed cap; the renderer's
 // memory budget governs) and exactly one of them is selected at a time. Only
 // the selected layer renders as an overlay.
+// CT-342: whether that overlay is drawn is the panel's own switch, on by
+// default. It is the ONLY thing that gates the overlay - neither the panel's
+// selection nor the Masks tool takes part any more.
 
 export interface MaskPanelState {
   readonly layers: ReadonlyArray<MaskLayer>;
   readonly selectedLayerId: string | null;
+  readonly isOverlayVisible: boolean;
 }
 
 export const EMPTY_MASK_PANEL_STATE: MaskPanelState = Object.freeze({
   layers: Object.freeze([]),
   selectedLayerId: null,
+  isOverlayVisible: true,
 });
+
+export function setMaskOverlayVisibility(
+  panel: MaskPanelState,
+  isOverlayVisible: boolean,
+): MaskPanelState {
+  return { ...panel, isOverlayVisible };
+}
+
+export function toggleMaskOverlayVisibility(panel: MaskPanelState): MaskPanelState {
+  return setMaskOverlayVisibility(panel, !panel.isOverlayVisible);
+}
+
+export function showMaskOverlay(panel: MaskPanelState): MaskPanelState {
+  return setMaskOverlayVisibility(panel, true);
+}
+
+export function hideMaskOverlay(panel: MaskPanelState): MaskPanelState {
+  return setMaskOverlayVisibility(panel, false);
+}
+
+// CT-344: opening the Masks tool shows the active panel's overlay, so a
+// hidden mask never leaves the tool open on a blank canvas. `wasToolActive` is
+// the tool's state BEFORE the toggle: only a false -> true transition (the
+// tool is about to open) shows it; closing the tool leaves the flag as is.
+export function showMaskOverlayWhenOpeningMasksTool(
+  panel: MaskPanelState,
+  wasToolActive: boolean,
+): MaskPanelState {
+  return wasToolActive ? panel : showMaskOverlay(panel);
+}
 
 const MASK_LAYER_ID_PREFIX = "mask";
 
@@ -54,7 +89,7 @@ function appendMaskLayerSelectingIt(
   panel: MaskPanelState,
   added: MaskLayer,
 ): MaskPanelState {
-  return { layers: [...panel.layers, added], selectedLayerId: added.id };
+  return { ...panel, layers: [...panel.layers, added], selectedLayerId: added.id };
 }
 
 function buildNextMaskLayerForPanel(
@@ -107,7 +142,7 @@ export function deleteMaskLayerFromPanel(
   const position = panel.layers.findIndex((layer) => layer.id === layerId);
   if (position < 0) return panel;
   const layers = panel.layers.filter((layer) => layer.id !== layerId);
-  return { layers, selectedLayerId: pickSelectionAfterDelete(panel, layers, position) };
+  return { ...panel, layers, selectedLayerId: pickSelectionAfterDelete(panel, layers, position) };
 }
 
 // The selection lands on the layer that took the deleted one's place, or on the

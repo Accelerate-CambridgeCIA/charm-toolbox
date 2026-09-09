@@ -24,6 +24,7 @@ import {
 import { DEFAULT_NPC_BIN_COUNT, buildNpcCategoryMasks } from "./npc-run-request";
 import { computeCnrScore } from "./cnr-score";
 import { buildRopExecuteParams } from "./rop-run-request";
+import { buildRopSearchExecuteParams, type RopSearchRunRequest } from "./rop-search-request";
 import type { RopCustomObjectiveScript, RopObjectiveKind } from "./rop-objective";
 
 // CT-309: the ROP panel's run flows. The source cube uploads ONCE into a
@@ -35,36 +36,71 @@ import type { RopCustomObjectiveScript, RopObjectiveKind } from "./rop-objective
 // categories in params.
 
 const ROP_BUILTIN_SOURCE: ToolboxRunUserScriptSource = { mode: "builtin", scriptName: "rop" };
+// CT-336: the search runs rop_search in the SAME retained session; the press
+// opens the session with module "rop", and each search execute names this
+// sibling module (both live in the built-in directory the session resolved).
+const ROP_SEARCH_MODULE_NAME: ToolboxBuiltinScriptName = "rop_search";
 const ROP_RUN_BUSY_LABEL = "Running analysis...";
 
 const ROP_RETURNED_NO_CANDIDATE =
   "The ROP run did not return a projection. Please report this as a bug.";
+const SEARCH_RETURNED_NO_PROJECTION =
+  "The projection search did not return a projection. Please report this as a bug.";
 const CUSTOM_OBJECTIVE_NEEDS_ONE_FINITE_NUMBER =
   "The objective script must return one finite number.";
 
 export type RopRollOutcome =
-  | { readonly status: "rolled"; readonly values: Float32Array }
+  // CT-337: a press can draw several projections in one execute, so a rolled
+  // outcome carries the whole batch (a default press is one band).
+  | { readonly status: "rolled"; readonly bands: ReadonlyArray<Float32Array> }
   | { readonly status: "stopped" }
   | { readonly status: "failed"; readonly message: string };
 
+// CT-336: the search delivers a single winning band, so it shares the press's
+// "one band or nothing" outcome shape under its own status name.
+export type RopSearchOutcome =
+  | { readonly status: "searched"; readonly values: Float32Array }
+  | { readonly status: "stopped" }
+  | { readonly status: "failed"; readonly message: string };
+
+// The retained session's cube (and the category masks its search objective
+// needs) upload ONCE; every press re-executes rop and the search re-executes
+// rop_search against the same spool, so neither costs a fresh cube read.
+interface RopSessionState {
+  session: UserScriptRunSession | null;
+  readonly raster: RasterImage;
+  readonly masks: ReadonlyArray<Uint8Array>;
+  readonly api: UserScriptRunChunkedApi;
+}
+
 // One holder per (panel, raster): it lazily opens the retained session on the
-// first press and must be released when the panel closes or the stack changes.
+// first press OR search and must be released when the panel closes or the
+// stack changes. CT-336: press and search share the session, so a search never
+// throws away the cube the next press would reuse.
 export interface RopProjectionSessionHolder {
   executeProjectionShowingPanelBusy(
     seed: number,
+    projectionCount: number,
     bindings: UserScriptRunFlowBindings,
   ): Promise<RopRollOutcome>;
+  searchBestProjectionShowingPanelBusy(
+    request: RopSearchRunRequest,
+    bindings: UserScriptRunFlowBindings,
+  ): Promise<RopSearchOutcome>;
   release(): Promise<void>;
 }
 
 export function createRopProjectionSessionHolder(
   raster: RasterImage,
+  maskCategoryBytes: ReadonlyArray<Uint8Array> = [],
   api: UserScriptRunChunkedApi = window.toolboxApi,
 ): RopProjectionSessionHolder {
-  const holder: { session: UserScriptRunSession | null } = { session: null };
+  const holder: RopSessionState = { session: null, raster, masks: maskCategoryBytes, api };
   return {
-    executeProjectionShowingPanelBusy: (seed, bindings) =>
-      rollProjectionShowingPanelBusy(holder, raster, seed, bindings, api),
+    executeProjectionShowingPanelBusy: (seed, projectionCount, bindings) =>
+      rollProjectionShowingPanelBusy(holder, seed, projectionCount, bindings),
+    searchBestProjectionShowingPanelBusy: (request, bindings) =>
+      searchProjectionsShowingPanelBusy(holder, request, bindings),
     release: async () => {
       await holder.session?.release();
       holder.session = null;
@@ -73,17 +109,31 @@ export function createRopProjectionSessionHolder(
 }
 
 async function rollProjectionShowingPanelBusy(
-  holder: { session: UserScriptRunSession | null },
-  raster: RasterImage,
+  holder: RopSessionState,
   seed: number,
+  projectionCount: number,
   bindings: UserScriptRunFlowBindings,
-  api: UserScriptRunChunkedApi,
 ): Promise<RopRollOutcome> {
   const busy = registerRopRunBusyEntry(bindings);
   try {
-    return await rollProjectionUpdatingBusyEntry(holder, raster, seed, bindings, api, busy);
+    return await rollProjectionUpdatingBusyEntry(holder, seed, projectionCount, bindings, busy);
   } catch (error) {
     return describeRopRollFailureOutcome(error);
+  } finally {
+    busy.clear();
+  }
+}
+
+async function searchProjectionsShowingPanelBusy(
+  holder: RopSessionState,
+  request: RopSearchRunRequest,
+  bindings: UserScriptRunFlowBindings,
+): Promise<RopSearchOutcome> {
+  const busy = registerRopRunBusyEntry(bindings);
+  try {
+    return await searchProjectionsUpdatingBusyEntry(holder, request, bindings, busy);
+  } catch (error) {
+    return describeRopSearchFailureOutcome(error);
   } finally {
     busy.clear();
   }
@@ -99,18 +149,31 @@ function registerRopRunBusyEntry(bindings: UserScriptRunFlowBindings): BusyEntry
 }
 
 async function rollProjectionUpdatingBusyEntry(
-  holder: { session: UserScriptRunSession | null },
-  raster: RasterImage,
+  holder: RopSessionState,
   seed: number,
+  projectionCount: number,
   bindings: UserScriptRunFlowBindings,
-  api: UserScriptRunChunkedApi,
   busy: BusyEntryHandle,
 ): Promise<RopRollOutcome> {
   const callbacks = buildRunCallbacksForBusyEntry(bindings, busy);
-  const session = await openRetainedRopSessionIfNeeded(holder, raster, api, callbacks);
+  const session = await openRetainedRopSessionIfNeeded(holder, callbacks);
   if (session === null) return { status: "stopped" };
-  const result = await session.execute(buildRopExecuteParams(seed), callbacks);
+  const params = buildRopExecuteParams(seed, projectionCount);
+  const result = await session.execute(params, callbacks);
   return describeRopRollOutcome(result);
+}
+
+async function searchProjectionsUpdatingBusyEntry(
+  holder: RopSessionState,
+  request: RopSearchRunRequest,
+  bindings: UserScriptRunFlowBindings,
+  busy: BusyEntryHandle,
+): Promise<RopSearchOutcome> {
+  const callbacks = buildRunCallbacksForBusyEntry(bindings, busy);
+  const session = await openRetainedRopSessionIfNeeded(holder, callbacks);
+  if (session === null) return { status: "stopped" };
+  const result = await session.execute(buildRopSearchExecuteParams(request), callbacks, ROP_SEARCH_MODULE_NAME);
+  return describeRopSearchOutcome(result);
 }
 
 function buildRunCallbacksForBusyEntry(
@@ -125,20 +188,22 @@ function buildRunCallbacksForBusyEntry(
 }
 
 // A canceled begin maps to "stopped" (nothing to report); a failed begin throws
-// so the shared failure mapping renders the message.
+// so the shared failure mapping renders the message. CT-336: the session
+// uploads the search objective's category masks alongside the cube, so the
+// resident worker delivers them to every rop_search execute as params["masks"].
 async function openRetainedRopSessionIfNeeded(
-  holder: { session: UserScriptRunSession | null },
-  raster: RasterImage,
-  api: UserScriptRunChunkedApi,
+  holder: RopSessionState,
   callbacks: ChunkedUserScriptRunCallbacks,
 ): Promise<UserScriptRunSession | null> {
   if (holder.session !== null) return holder.session;
   const opened = await openUserScriptRunSessionOverCube(
-    api,
-    buildUserScriptRunCubeInputFromRaster(raster),
+    holder.api,
+    buildUserScriptRunCubeInputFromRaster(holder.raster),
     ROP_BUILTIN_SOURCE,
     "cube",
     callbacks,
+    undefined,
+    { masks: holder.masks },
   );
   if (opened.status === "canceled") return null;
   if (opened.status === "failed") throw new Error(opened.message);
@@ -149,13 +214,27 @@ async function openRetainedRopSessionIfNeeded(
 function describeRopRollOutcome(result: ToolboxRunUserScriptResult): RopRollOutcome {
   if (result.status === "canceled") return { status: "stopped" };
   if (result.status === "failed") return { status: "failed", message: result.message };
-  if (result.status === "completed-cube" && result.bands[0] !== undefined) {
-    return { status: "rolled", values: result.bands[0] };
+  if (result.status === "completed-cube" && result.bands.length > 0) {
+    return { status: "rolled", bands: result.bands };
   }
   return { status: "failed", message: ROP_RETURNED_NO_CANDIDATE };
 }
 
+function describeRopSearchOutcome(result: ToolboxRunUserScriptResult): RopSearchOutcome {
+  if (result.status === "canceled") return { status: "stopped" };
+  if (result.status === "failed") return { status: "failed", message: result.message };
+  if (result.status === "completed-cube" && result.bands[0] !== undefined) {
+    return { status: "searched", values: result.bands[0] };
+  }
+  return { status: "failed", message: SEARCH_RETURNED_NO_PROJECTION };
+}
+
 function describeRopRollFailureOutcome(error: unknown): RopRollOutcome {
+  if (isOperationStoppedError(error)) return { status: "stopped" };
+  return { status: "failed", message: describeElectronInvokeFailure(error) };
+}
+
+function describeRopSearchFailureOutcome(error: unknown): RopSearchOutcome {
   if (isOperationStoppedError(error)) return { status: "stopped" };
   return { status: "failed", message: describeElectronInvokeFailure(error) };
 }

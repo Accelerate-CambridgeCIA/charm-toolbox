@@ -32,6 +32,19 @@ export async function openMasksOptions(page: Page): Promise<Locator> {
   });
 }
 
+// CT-345: opening a competing right-side panel turns the Masks TOOL off, not
+// just the aside, so the toolbar toggle is the oracle for the tool state.
+export function masksToolbarToggleInEitherState(page: Page): Locator {
+  return applicationToolbar(page).getByRole("button", { name: /^Masks( \(active\))?$/ });
+}
+
+export async function expectMasksToolActive(page: Page, isActive: boolean): Promise<void> {
+  await expect(masksToolbarToggleInEitherState(page)).toHaveAttribute(
+    "aria-pressed",
+    String(isActive),
+  );
+}
+
 export async function closeMasksOptions(page: Page): Promise<void> {
   await masksToolbarToggle(page, true).click();
   await expect(masksOptionsPanel(page)).toBeHidden();
@@ -57,8 +70,10 @@ export function maskCategoryColorField(page: Page, position: number): Locator {
   return masksOptionsPanel(page).getByLabel(`Category ${position} color`);
 }
 
+// CT-332: the name pattern has to exclude "Add category from file", the second
+// button beside this one; this button's accessible name ends in its N/5 count.
 export function addMaskCategoryButton(page: Page): Locator {
-  return masksOptionsPanel(page).getByRole("button", { name: /^Add category/ });
+  return masksOptionsPanel(page).getByRole("button", { name: /^Add category \d+\/\d+$/ });
 }
 
 // Radix puts the aria-label on the slider ROOT and role="slider" (with

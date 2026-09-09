@@ -8,7 +8,11 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { Viewport, type ViewportMaskPainting } from "@/components/viewport";
+import {
+  Viewport,
+  type ViewportMaskOverlaySelection,
+  type ViewportMaskPainting,
+} from "@/components/viewport";
 import {
   getGridLayoutCellCount,
   getGridLayoutTailwindTrackClasses,
@@ -39,7 +43,9 @@ import type { ViewportRoi } from "@/lib/image/viewport-roi";
 import { doesMaskLayerCoverDimensions, type MaskLayer } from "@/lib/masks/mask-layer";
 import {
   findSelectedMaskLayerOrNull,
+  panelHasMaskLayers,
   replaceSelectedMaskLayerValues,
+  toggleMaskOverlayVisibility,
 } from "@/lib/masks/mask-panel";
 import type { MaskBrushSettings } from "@/lib/masks/mask-brush";
 import { cn } from "@/lib/utils";
@@ -155,6 +161,9 @@ function renderViewportCellViewport(
       fileName={props.content?.fileName ?? null}
       normalizationEnabled={settings.normalizationEnabled}
       onToggleNormalizedViewing={settings.handleToggleNormalizedViewing}
+      showMaskOverlayToggle={settings.showMaskOverlayToggle}
+      maskOverlayVisible={settings.maskOverlayVisible}
+      onToggleMaskOverlayVisibility={settings.handleToggleMaskOverlayVisibility}
       viewChannelsSeparately={settings.viewChannelsSeparately}
       onToggleViewChannelsSeparately={settings.handleToggleViewChannelsSeparately}
       selectedBandIndex={settings.selectedBandIndex}
@@ -168,6 +177,7 @@ function renderViewportCellViewport(
       onPreviewRoiEdit={settings.handlePreviewRoiEdit}
       onCommitRoiEdit={settings.handleCommitRoiEdit}
       onRegionToolPlainClick={settings.handleRegionToolPlainClick}
+      maskOverlay={settings.maskOverlay}
       maskPainting={settings.maskPainting}
       onPinPixelSpectrum={settings.handlePinPixelSpectrum}
       onOpenImage={props.onOpenImage}
@@ -197,6 +207,9 @@ interface ViewportCellInteractionSettings {
   toneCurvePreviewChannelLookupTables: ToneCurveChannelPreviewLuts | null;
   normalizationEnabled: boolean;
   handleToggleNormalizedViewing: () => void;
+  showMaskOverlayToggle: boolean;
+  maskOverlayVisible: boolean;
+  handleToggleMaskOverlayVisibility: () => void;
   viewChannelsSeparately: boolean;
   handleToggleViewChannelsSeparately: () => void;
   selectedBandIndex: number;
@@ -211,6 +224,7 @@ interface ViewportCellInteractionSettings {
   handleCommitRoiEdit: (roi: ViewportRoi) => void;
   handleRegionToolPlainClick: (clickedImagePixel: ClickedImagePixel | null) => void;
   handlePinPixelSpectrum: (imageX: number, imageY: number) => void;
+  maskOverlay: ViewportMaskOverlaySelection | null;
   maskPainting: ViewportMaskPainting | null;
 }
 
@@ -341,6 +355,14 @@ function useViewportCellInteractionSettings(
     (bandIndex: number) => removeBand(cellIndex, bandIndex),
     [cellIndex, removeBand],
   );
+  const handleToggleMaskOverlayVisibility = useCallback(
+    () =>
+      setRenderingState(cellIndex, {
+        ...renderingState,
+        masks: toggleMaskOverlayVisibility(renderingState.masks),
+      }),
+    [cellIndex, renderingState, setRenderingState],
+  );
   const handleCommitMaskStrokeValues = useCallback(
     (values: Uint8Array) =>
       setRenderingState(cellIndex, {
@@ -359,6 +381,9 @@ function useViewportCellInteractionSettings(
     toneCurvePreviewChannelLookupTables: getChannelLookupTablesForViewport(cellIndex),
     normalizationEnabled: renderingState.normalizationEnabled,
     handleToggleNormalizedViewing,
+    showMaskOverlayToggle: panelHasMaskLayers(renderingState.masks),
+    maskOverlayVisible: renderingState.masks.isOverlayVisible,
+    handleToggleMaskOverlayVisibility,
     viewChannelsSeparately: renderingState.viewChannelsSeparately,
     handleToggleViewChannelsSeparately,
     selectedBandIndex: renderingState.selectedBandIndex,
@@ -373,8 +398,15 @@ function useViewportCellInteractionSettings(
     handleCommitRoiEdit,
     handleRegionToolPlainClick,
     handlePinPixelSpectrum,
+    maskOverlay: buildMaskOverlayOrNull({
+      isOverlayVisible: renderingState.masks.isOverlayVisible,
+      layer: findSelectedMaskLayerOrNull(renderingState.masks),
+      content,
+    }),
     maskPainting: buildMaskPaintingOrNull({
+      isSelected,
       isMasksToolActive: masksTool.isMasksToolActive,
+      isOverlayVisible: renderingState.masks.isOverlayVisible,
       layer: findSelectedMaskLayerOrNull(renderingState.masks),
       brush: masksTool.brush,
       content,
@@ -383,23 +415,56 @@ function useViewportCellInteractionSettings(
   };
 }
 
+// CT-342: the overlay is drawn whenever the panel's own visibility flag is on,
+// a layer is selected, and that layer still covers the panel's stack. Neither
+// the panel's selection nor the Masks tool takes part: a mask a user chose to
+// see stays on screen while they work in another panel or another tool.
+export interface MaskOverlayInputs {
+  readonly isOverlayVisible: boolean;
+  readonly layer: MaskLayer | null;
+  readonly content: ViewportCellContent | null;
+}
+
+export function buildMaskOverlayOrNull(
+  inputs: MaskOverlayInputs,
+): ViewportMaskOverlaySelection | null {
+  if (!inputs.isOverlayVisible) return null;
+  const layer = findMaskLayerCoveringPanelContentOrNull(inputs.layer, inputs.content);
+  return layer ? { layer } : null;
+}
+
+function findMaskLayerCoveringPanelContentOrNull(
+  layer: MaskLayer | null,
+  content: ViewportCellContent | null,
+): MaskLayer | null {
+  if (!layer || !content) return null;
+  const dimensions = getImageSourceDimensions(content.source);
+  if (!doesMaskLayerCoverDimensions(layer, dimensions.width, dimensions.height)) return null;
+  return layer;
+}
+
 // CT-304: painting exists only while the Masks tool is on, a layer is selected,
-// and that layer still covers the panel's stack - the same three conditions that
-// make the overlay meaningful.
-interface MaskPaintingInputs {
+// and that layer still covers the panel's stack. CT-331: it also requires the
+// panel to be SELECTED, so opening the Masks tool does not paint into every
+// panel that carries a layer. CT-344: it also requires the panel's OWN overlay
+// switch to be on - hiding the mask on the selected panel disables the brush
+// there too, so showing a mask never draws on it by accident.
+export interface MaskPaintingInputs {
+  readonly isSelected: boolean;
   readonly isMasksToolActive: boolean;
+  readonly isOverlayVisible: boolean;
   readonly layer: MaskLayer | null;
   readonly brush: MaskBrushSettings;
   readonly content: ViewportCellContent | null;
   readonly onCommitStrokeValues: (values: Uint8Array) => void;
 }
 
-function buildMaskPaintingOrNull(inputs: MaskPaintingInputs): ViewportMaskPainting | null {
-  if (!inputs.isMasksToolActive || !inputs.layer || !inputs.content) return null;
-  const dimensions = getImageSourceDimensions(inputs.content.source);
-  if (!doesMaskLayerCoverDimensions(inputs.layer, dimensions.width, dimensions.height)) return null;
+export function buildMaskPaintingOrNull(inputs: MaskPaintingInputs): ViewportMaskPainting | null {
+  if (!inputs.isSelected || !inputs.isMasksToolActive || !inputs.isOverlayVisible) return null;
+  const layer = findMaskLayerCoveringPanelContentOrNull(inputs.layer, inputs.content);
+  if (!layer) return null;
   return {
-    layer: inputs.layer,
+    layer,
     brush: inputs.brush,
     onCommitStrokeValues: inputs.onCommitStrokeValues,
   };

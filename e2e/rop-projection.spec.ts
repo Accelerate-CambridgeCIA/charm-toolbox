@@ -7,7 +7,12 @@ import {
   maskMultibandPng,
   multiBandTiff,
 } from "./fixtures/fixture-manifest";
-import { nonClearPixelFraction, summarizeCanvasPixels } from "./support/canvas-pixels";
+import {
+  colorfulNonClearPixelFraction,
+  nonClearPixelFraction,
+  summarizeCanvasPixels,
+} from "./support/canvas-pixels";
+import { readPythonWorkerSpawnCount } from "./support/dialog-stub-controls";
 import { selectGridLayout } from "./support/grid-layout-controls";
 import { closeToolboxApp, launchToolboxApp } from "./support/launch-app";
 import type { LaunchedApp } from "./support/launch-app";
@@ -26,6 +31,7 @@ import {
   panelCanvas,
   panelCell,
   panelGrid,
+  pressNewProjectionUntilBatchReady,
   pressNewProjectionUntilProjectionReady,
   pressNewProjectionUntilScoreShows,
   readHistoryEntries,
@@ -37,14 +43,21 @@ import {
   ropNewProjectionButton,
   ropObjectivePicker,
   ropOptionsPanel,
+  ropPerBandScoreRowForBand,
+  ropPerBandScoreRows,
   ropPinnedPanelReadout,
+  ropProjectionsPerPressField,
   ropScoreReadout,
   ropSeedReadout,
+  ropSourcePanelReadout,
+  ropUseSelectedPanelButton,
   ROP_NO_CANDIDATE_TEXT,
   ROP_PANEL_LABEL,
   ROP_PRESS_REFUSED_TEXT,
   selectPanel,
   setForcedRopSeed,
+  setRopProjectionsPerPress,
+  useTheSelectedPanelAsRopSource,
 } from "./support/page-objects";
 import { runAsStoryboardStep } from "./support/storyboard-step";
 
@@ -64,8 +77,12 @@ import { runAsStoryboardStep } from "./support/storyboard-step";
 //     relative tolerance (plus the readout's four-significant-figure quantum),
 //     and its Metadata reports one band;
 //   - the SOURCE panel is untouched: its readout at (0,0) still reports the
-//     stack's true value and its canvas still renders near-black
-//     (nonClearPixelFraction, the normalized-viewing.spec.ts pattern);
+//     stack's true value and its canvas still shows nothing but the imported
+//     mask's tint over the near-black stack. CT-342 keeps that overlay on
+//     screen once the Masks aside closes, so the near-black check runs BEFORE
+//     the import and the after-press check is colorfulNonClearPixelFraction,
+//     which stays ~1 for "tint over a dark stack" at any panel size and would
+//     collapse if the projection had landed in the source panel;
 //   - the next press REPLACES the candidate panel: the panel count is
 //     unchanged and the readout differs from the first candidate;
 //   - a full grid at its largest layout REFUSES the press before any run;
@@ -90,6 +107,12 @@ const REFERENCE_CNR_SCORE = builtinScriptReferences.ropCnr.value;
 const EXPECTED_SCORE_TEXT = REFERENCE_CNR_SCORE.toPrecision(4);
 const SOURCE_ORIGIN_VALUE = String(multiBandTiff.samplePixels[0]?.valuesPerBand[0]);
 const NEAR_BLACK_FRACTION_CEILING = 0.02;
+const MASK_TINT_COLOURFUL_FRACTION_FLOOR = 0.9;
+const PROJECTIONS_PER_PRESS = 3;
+const CNR_SCORE_NAME = "CNR";
+const FIRST_PROJECTION_BAND_LABEL = "Projection 1";
+const OVER_RANGE_PROJECTIONS_PER_PRESS = 21;
+const PROJECTIONS_PER_PRESS_HINT = "Enter a whole number from 1 to 20.";
 const RELATIVE_TOLERANCE = 1e-4;
 const LARGEST_GRID_LAYOUT = "2x3";
 const LARGEST_GRID_PANEL_COUNT = 6;
@@ -131,8 +154,8 @@ test.afterEach(async () => {
 test("delivers each press as a one-band stack next to the source and replaces it on the next press", async () => {
   const page = launched.window;
 
-  await importTheParchmentMask(page);
   await expectSourcePanelRendersNearBlack(page);
+  await importTheParchmentMask(page);
   await assertSourceOriginStillReadsItsTrueValue(page);
 
   await openOperation(page, ROP_PANEL_LABEL);
@@ -207,6 +230,78 @@ test("stays pinned to its source panel when a duplicate takes the selection", as
   await expectPanelMatchesTheReferenceProjection(page, CANDIDATE_PANEL);
 });
 
+// CT-333: the pin moves on ONE deliberate act. The aside names its source
+// panel, offers the selected panel by number, and re-pinning starts the
+// session over on the new stack: no candidate, nothing to keep, and the
+// candidate panel from the old source left behind as an ordinary stack.
+test("moves its source to the selected panel on request and starts over there", async () => {
+  const page = launched.window;
+  const DUPLICATE_PANEL = 3;
+  const PANEL_COUNT_BEFORE_THE_NEXT_PRESS = 3;
+  const REPINNED_CANDIDATE_PANEL = 4;
+
+  await openOperation(page, ROP_PANEL_LABEL);
+  await expectRopAsideToProjectFromPanel(page, SOURCE_PANEL);
+  await pressNewProjectionUntilProjectionReady(page, FORCED_SEED);
+
+  await duplicateSourcePanelAndSelectTheCopy(page, DUPLICATE_PANEL);
+  await expectRopAsideToProjectFromPanel(page, SOURCE_PANEL);
+  await expectUseSelectedPanelToOfferPanel(page, DUPLICATE_PANEL);
+
+  await useTheSelectedPanelAsRopSource(page, DUPLICATE_PANEL);
+  await expectRopAsideToHaveStartedOverOnPanel(page, DUPLICATE_PANEL, PANEL_COUNT_BEFORE_THE_NEXT_PRESS);
+
+  await setForcedRopSeed(page, OTHER_SEED);
+  await pressNewProjectionUntilProjectionReady(page, OTHER_SEED);
+  await expectTheNewSourcesPressToOpenAFurtherPanel(page, REPINNED_CANDIDATE_PANEL);
+  await expectPanelMatchesTheReferenceProjection(page, CANDIDATE_PANEL);
+});
+
+// CT-335: the retained ROP session runs on ONE resident interpreter that
+// loaded the cube once, so three presses cost exactly one spawn. The oracle is
+// main's own spawn counter (toolboxE2E.readPythonWorkerSpawnCount, counting
+// one-shot and resident spawns alike), plus the pinned reference for the first
+// press (the resident path must not change what a press computes) and a third
+// press that really is a different projection.
+test("keeps one resident Python worker across three presses", async () => {
+  const page = launched.window;
+  const THIRD_SEED = FORCED_SEED + 2;
+
+  await openOperation(page, ROP_PANEL_LABEL);
+  const spawnsBeforeAnyPress = await readSpawnCountBeforeAnyPress(page);
+
+  await pressNewProjectionUntilProjectionReady(page, FORCED_SEED);
+  await expectPanelMatchesTheReferenceProjection(page, CANDIDATE_PANEL);
+
+  await setForcedRopSeed(page, OTHER_SEED);
+  await pressNewProjectionUntilProjectionReady(page, OTHER_SEED);
+  await setForcedRopSeed(page, THIRD_SEED);
+  await pressNewProjectionUntilProjectionReady(page, THIRD_SEED);
+  await expectPanelToDifferFromTheReferenceProjection(page, CANDIDATE_PANEL);
+
+  await expectSpawnCountRoseByExactlyOne(page, spawnsBeforeAnyPress);
+});
+
+// CT-337: one press can draw a whole batch. The ORACLES are the candidate
+// panel's Metadata reporting three bands, band 1 of the batch still matching
+// the single-press reference (the first draw of a seed is the same draw
+// whatever the count), the per-band score list carrying one row per projection
+// with band 1 at the pinned CNR reference, and History naming the batch.
+test("draws several projections in one press and scores each of them", async () => {
+  const page = launched.window;
+
+  await importTheParchmentMask(page);
+  await openOperation(page, ROP_PANEL_LABEL);
+  await chooseRopObjective(page, "CNR");
+  await expectAnUnusableCountToBlockThePress(page);
+  await setRopProjectionsPerPress(page, PROJECTIONS_PER_PRESS);
+  await pressNewProjectionUntilBatchReady(page, FORCED_SEED, PROJECTIONS_PER_PRESS);
+
+  await expectEveryProjectionOfTheBatchToBeScored(page);
+  await closeRopOptions(page);
+  await expectCandidatePanelToHoldTheWholeBatch(page);
+});
+
 test("locks the mask objectives until a layer with two painted categories exists", async () => {
   const page = launched.window;
 
@@ -227,6 +322,104 @@ test("locks the mask objectives until a layer with two painted categories exists
   );
   await expect(ropOptionsPanel(page)).not.toContainText("painted pixels");
 });
+
+// A count the panel cannot use disables the press and the field says what a
+// usable one looks like.
+async function expectAnUnusableCountToBlockThePress(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "An out-of-range count blocks the press", async () => {
+    await setRopProjectionsPerPress(page, OVER_RANGE_PROJECTIONS_PER_PRESS);
+    await expect(ropNewProjectionButton(page)).toBeDisabled();
+    await ropProjectionsPerPressField(page).hover();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: PROJECTIONS_PER_PRESS_HINT }),
+    ).toBeVisible();
+  });
+}
+
+// The list is the CT-319 Top bands presentation, so it names each band by its
+// identity text ("#k Projection k") and carries that band's own score.
+async function expectEveryProjectionOfTheBatchToBeScored(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "Every projection of the batch has its own CNR score", async () => {
+    await expect(ropPerBandScoreRows(page, CNR_SCORE_NAME)).toHaveCount(PROJECTIONS_PER_PRESS);
+    await expect(
+      ropPerBandScoreRowForBand(page, CNR_SCORE_NAME, FIRST_PROJECTION_BAND_LABEL),
+    ).toContainText(EXPECTED_SCORE_TEXT);
+  });
+}
+
+// Band 1 of a batch IS the single press's projection (the same seed draws the
+// same first Q), so the pinned reference still applies to it.
+async function expectCandidatePanelToHoldTheWholeBatch(page: Page): Promise<void> {
+  await selectPanel(page, CANDIDATE_PANEL);
+  await runAsStoryboardStep(page, `Panel 2 is a ${PROJECTIONS_PER_PRESS}-band stack`, async () => {
+    expect((await readMetadata(page)).bandCount).toBe(String(PROJECTIONS_PER_PRESS));
+    const readout = await readPixelValueAt(page, CANDIDATE_PANEL, 0, 0, IMAGE);
+    expect(readout.bandLabel).toContain(FIRST_PROJECTION_BAND_LABEL);
+  });
+  await expectPanelMatchesTheReferenceProjection(page, CANDIDATE_PANEL);
+  await runAsStoryboardStep(page, "Panel 2's History names the whole batch", async () => {
+    await expectHistoryToRecordOperation(page, {
+      actionLabel: ROP_PANEL_LABEL,
+      detailSubstrings: [`ROP (seed ${FORCED_SEED}, ${PROJECTIONS_PER_PRESS} projections)`],
+    });
+  });
+}
+
+async function expectRopAsideToProjectFromPanel(page: Page, panelNumber: number): Promise<void> {
+  await runAsStoryboardStep(page, `The ROP aside projects from panel ${panelNumber}`, async () => {
+    await expect(ropSourcePanelReadout(page)).toHaveText(`Projecting from Panel ${panelNumber}`);
+    await expect(ropPinnedPanelReadout(page)).toHaveText(`Panel ${panelNumber}`);
+  });
+}
+
+async function expectUseSelectedPanelToOfferPanel(page: Page, panelNumber: number): Promise<void> {
+  await runAsStoryboardStep(page, `Use selected panel offers panel ${panelNumber}`, async () => {
+    await expect(ropUseSelectedPanelButton(page)).toBeEnabled();
+    await expect(ropUseSelectedPanelButton(page)).toHaveText(
+      `Use selected panel (Panel ${panelNumber})`,
+    );
+  });
+}
+
+// Re-pinning releases the retained session, so the aside holds no candidate and
+// no pointer to freeze; the old source's candidate panel simply stays on screen.
+async function expectRopAsideToHaveStartedOverOnPanel(
+  page: Page,
+  panelNumber: number,
+  expectedPanelCount: number,
+): Promise<void> {
+  await runAsStoryboardStep(page, `The aside starts over on panel ${panelNumber}`, async () => {
+    await expect(ropPinnedPanelReadout(page)).toHaveText(`Panel ${panelNumber}`);
+    await expect(ropSeedReadout(page)).toHaveText(ROP_NO_CANDIDATE_TEXT);
+    await expect(ropKeepButton(page)).toBeDisabled();
+    await expect(ropUseSelectedPanelButton(page)).toBeDisabled();
+    expect(await countPanels(page)).toBe(expectedPanelCount);
+  });
+}
+
+async function expectTheNewSourcesPressToOpenAFurtherPanel(
+  page: Page,
+  panelNumber: number,
+): Promise<void> {
+  await runAsStoryboardStep(page, `The press from the new source opened panel ${panelNumber}`, async () => {
+    await expect(panelCanvas(page, panelNumber)).toBeVisible();
+    expect(await countPanels(page)).toBe(panelNumber);
+  });
+}
+
+async function readSpawnCountBeforeAnyPress(page: Page): Promise<number> {
+  let count = 0;
+  await runAsStoryboardStep(page, "Read the interpreter spawn count before any press", async () => {
+    count = await readPythonWorkerSpawnCount(page);
+  });
+  return count;
+}
+
+async function expectSpawnCountRoseByExactlyOne(page: Page, countBefore: number): Promise<void> {
+  await runAsStoryboardStep(page, "Three presses cost exactly one interpreter spawn", async () => {
+    expect(await readPythonWorkerSpawnCount(page)).toBe(countBefore + 1);
+  });
+}
 
 async function importTheParchmentMask(page: Page): Promise<void> {
   await openMasksOptions(page);
@@ -270,6 +463,18 @@ async function expectSourcePanelRendersNearBlack(page: Page): Promise<void> {
   });
 }
 
+// Every non-clear pixel of the source panel belongs to the mask overlay (the
+// 12-bit stack itself renders near-black), so the colourful share of them is
+// ~1. A projection delivered into this panel would render as bright grayscale
+// and drag that share far down, whatever the panel's size or letterbox.
+async function expectSourcePanelShowsOnlyTheMaskTint(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "The source panel still shows only the mask tint", async () => {
+    await expect
+      .poll(() => colorfulNonClearPixelFraction(panelCanvas(page, SOURCE_PANEL)))
+      .toBeGreaterThan(MASK_TINT_COLOURFUL_FRACTION_FLOOR);
+  });
+}
+
 async function assertSourceOriginStillReadsItsTrueValue(page: Page): Promise<void> {
   await runAsStoryboardStep(page, "The source readout still reports the true value", async () => {
     const readout = await readPixelValueAt(page, SOURCE_PANEL, 0, 0, IMAGE);
@@ -281,7 +486,7 @@ async function assertSourceOriginStillReadsItsTrueValue(page: Page): Promise<voi
 // it keeps the selection (the delivery passes selectResultPanel: false).
 async function expectSourcePanelUntouchedByThePress(page: Page): Promise<void> {
   await assertSourceOriginStillReadsItsTrueValue(page);
-  await expectSourcePanelRendersNearBlack(page);
+  await expectSourcePanelShowsOnlyTheMaskTint(page);
   await runAsStoryboardStep(page, "The source panel stays selected", async () => {
     await expect(panelCell(page, SOURCE_PANEL)).toHaveAttribute("aria-selected", "true");
     await expect(panelCell(page, CANDIDATE_PANEL)).toHaveAttribute("aria-selected", "false");

@@ -82,6 +82,7 @@ function parseViewportEntryOrThrow(value: unknown): ProjectViewportEntry {
     roi: null,
     masks,
     selectedMaskIndex: parseSelectedMaskIndexOrNull(entry["selectedMaskIndex"], masks.length),
+    isOverlayVisible: parseOverlayVisibilityOrDefault(entry["isOverlayVisible"]),
     ...parseColorInterpretationFieldOrOmit(entry["colorInterpretation"]),
   };
 }
@@ -123,6 +124,12 @@ function parseMaskCategoryOrThrow(value: unknown): ProjectMaskCategory {
 function parseSelectedMaskIndexOrNull(value: unknown, maskCount: number): number | null {
   if (typeof value !== "number" || !Number.isInteger(value)) return null;
   return value >= 0 && value < maskCount ? value : null;
+}
+
+// CT-342: a bundle written before the overlay switch existed has no key here,
+// which reads as "the overlay was showing", the flag's default.
+function parseOverlayVisibilityOrDefault(value: unknown): boolean {
+  return typeof value === "boolean" ? value : true;
 }
 
 function parseOpacityPercentOrDefault(value: unknown): number {

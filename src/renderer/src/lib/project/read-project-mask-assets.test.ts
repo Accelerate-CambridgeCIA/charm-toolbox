@@ -63,6 +63,27 @@ describe("readMaskPanelStateForViewportEntry", () => {
     expect(panel.selectedLayerId).toBe("mask-1");
   });
 
+  // CT-342: the restored panel carries the overlay switch the bundle recorded,
+  // so reopening a project shows exactly the masks it was saved showing.
+  it("restores the overlay visibility the entry recorded", async () => {
+    const api = buildReaderApi(
+      await buildAssetsFor([["assets/viewport-0-mask-0.png", Uint8Array.from([1, 0, 0, 0])]]),
+    );
+    const manifests = [buildManifest("Mask 1", "assets/viewport-0-mask-0.png")];
+    const visible = await readMaskPanelStateForViewportEntry(
+      "/tmp/p/project.json",
+      buildEntry(manifests, 0, true),
+      api,
+    );
+    const hidden = await readMaskPanelStateForViewportEntry(
+      "/tmp/p/project.json",
+      buildEntry(manifests, 0, false),
+      api,
+    );
+    expect(visible.isOverlayVisible).toBe(true);
+    expect(hidden.isOverlayVisible).toBe(false);
+  });
+
   it("fails with the asset path when a mask asset is missing from the bundle", async () => {
     const api = buildReaderApi(new Map());
     await expect(
@@ -139,6 +160,7 @@ function buildManifest(name: string, relativePath: string): ProjectMaskLayer {
 function buildEntry(
   masks: ReadonlyArray<ProjectMaskLayer>,
   selectedMaskIndex: number | null = null,
+  isOverlayVisible = true,
 ): ProjectViewportEntry {
   return {
     index: 0,
@@ -153,5 +175,6 @@ function buildEntry(
     roi: null,
     masks,
     selectedMaskIndex,
+    isOverlayVisible,
   };
 }

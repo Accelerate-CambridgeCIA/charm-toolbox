@@ -7,12 +7,15 @@ import {
   maskMultibandPng,
   multiBandTiff,
 } from "./fixtures/fixture-manifest";
+import { readPythonWorkerSpawnCount } from "./support/dialog-stub-controls";
 import { closeToolboxApp, launchToolboxApp } from "./support/launch-app";
 import type { LaunchedApp } from "./support/launch-app";
 import {
   chooseRopObjective,
   closeMasksOptions,
   countPanels,
+  duplicateMenuItem,
+  duplicatePanelViaContextMenu,
   enqueueOpenDialogPaths,
   expectHistoryToRecordOperation,
   expectPixelReadoutToEqual,
@@ -22,12 +25,18 @@ import {
   openMasksOptions,
   openOperation,
   panelCanvas,
+  panelCell,
+  panelGrid,
   pressNewProjectionUntilProjectionReady,
   readMetadata,
   ropOptionsPanel,
   ropProjectionCountField,
   ropSearchButton,
+  ropSeedReadout,
+  ROP_NO_CANDIDATE_TEXT,
   ROP_PANEL_LABEL,
+  ROP_PRESS_REFUSED_TEXT,
+  selectGridLayout,
   selectPanel,
   setRopProjectionCount,
   startRopProjectionSearch,
@@ -68,9 +77,12 @@ import { runAsStoryboardStep } from "./support/storyboard-step";
 const SOURCE_PANEL = 1;
 const RESULT_PANEL = 2;
 const FURTHER_CANDIDATE_PANEL = 3;
+const LARGEST_GRID_LAYOUT = "2x3";
+const LARGEST_GRID_PANEL_COUNT = 6;
 const IMAGE = { width: multiBandTiff.width, height: multiBandTiff.height };
 const FORCED_SEED = builtinScriptReferences.ropSeed;
 const SEARCH_REFERENCE = builtinScriptReferences.ropSearch;
+const CNR_SEARCH_REFERENCE = builtinScriptReferences.ropSearchCnr;
 const OBJECTIVE_SCRIPT_FILE_NAME = String(SEARCH_REFERENCE.objectiveScript);
 const SEARCHED_PROJECTION_COUNT = Number(SEARCH_REFERENCE.params.count);
 const EXPECTED_SCORE_TEXT = builtinScriptReferences.ropSearchScore.value.toPrecision(4);
@@ -132,6 +144,78 @@ test("searches 50 projections and delivers the best-scoring one as a frozen stac
   await expectResultPanelIsAOneBandStackWhoseHistoryNamesTheSearch(page);
 });
 
+// CT-336: the search runs rop_search in the SAME resident session a press
+// opens, so a press, a 50-projection search, and a further press cost exactly
+// ONE interpreter spawn between them. The CNR objective is scored in TS, so no
+// per-candidate one-shot run inflates the spawn count; the winner is pinned as
+// builtinScriptReferences.ropSearchCnr (float noise, not the first draw, picks
+// it), and the post-search press opens a new panel because the winner is frozen.
+test("presses, searches, and presses again on one resident interpreter", async () => {
+  const page = launched.window;
+
+  await openOperation(page, ROP_PANEL_LABEL);
+  await chooseRopObjective(page, "CNR");
+  const spawnsBeforeAnyRun = await readSpawnCountBeforeAnyRun(page);
+
+  await pressNewProjectionUntilProjectionReady(page, FORCED_SEED);
+  await setRopProjectionCount(page, SEARCHED_PROJECTION_COUNT);
+  await startRopProjectionSearch(page);
+  await expectTheWinnerToHaveTakenOverTheCandidatePanel(page);
+  await expectResultPanelMatchesTheCnrSearchWinner(page);
+
+  await expectAFurtherPressToOpenAThirdPanel(page);
+  await expectSpawnCountRoseByExactlyOne(page, spawnsBeforeAnyRun);
+});
+
+async function readSpawnCountBeforeAnyRun(page: Page): Promise<number> {
+  let count = 0;
+  await runAsStoryboardStep(page, "Read the interpreter spawn count before any run", async () => {
+    count = await readPythonWorkerSpawnCount(page);
+  });
+  return count;
+}
+
+function cnrSearchValueAtPixel(x: number, y: number): number {
+  const value = CNR_SEARCH_REFERENCE.values[y * IMAGE.width + x];
+  if (value === undefined) throw new Error(`rop_search CNR reference is missing (${x}, ${y})`);
+  return value;
+}
+
+async function expectResultPanelMatchesTheCnrSearchWinner(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "The delivered stack is the pinned CNR winner", async () => {
+    for (const pixel of [
+      { x: 0, y: 0 },
+      { x: 3, y: 0 },
+      { x: 0, y: 3 },
+      { x: 3, y: 3 },
+    ]) {
+      const expected = cnrSearchValueAtPixel(pixel.x, pixel.y);
+      await expectPixelReadoutToEqual(page, {
+        panel: RESULT_PANEL,
+        imageX: pixel.x,
+        imageY: pixel.y,
+        dimensions: IMAGE,
+        expected,
+        tolerance: readoutToleranceFor(expected),
+      });
+    }
+  });
+}
+
+async function expectAFurtherPressToOpenAThirdPanel(page: Page): Promise<void> {
+  await pressNewProjectionUntilProjectionReady(page, FORCED_SEED);
+  await runAsStoryboardStep(page, "The post-search press opened a third panel", async () => {
+    await expect(panelCanvas(page, FURTHER_CANDIDATE_PANEL)).toBeVisible();
+    expect(await countPanels(page)).toBe(FURTHER_CANDIDATE_PANEL);
+  });
+}
+
+async function expectSpawnCountRoseByExactlyOne(page: Page, countBefore: number): Promise<void> {
+  await runAsStoryboardStep(page, "A press, a search, and a press cost one spawn", async () => {
+    expect(await readPythonWorkerSpawnCount(page)).toBe(countBefore + 1);
+  });
+}
+
 test("stops a running search, delivering nothing", async () => {
   const page = launched.window;
 
@@ -147,6 +231,53 @@ test("stops a running search, delivering nothing", async () => {
   expect(await countPanels(page)).toBe(1);
   await expect(ropSearchButton(page)).toBeEnabled({ timeout: SEARCH_TIMEOUT_MS });
 });
+
+// CT-330: a search whose winner could not land anywhere must refuse BEFORE the
+// (potentially long) run, not after. With every panel already in use and no
+// candidate panel ever pressed, the pre-check has nothing to replace and
+// nowhere fresh to open.
+test("refuses a search before running when every panel is in use", async () => {
+  const page = launched.window;
+
+  await fillTheLargestGridWithDuplicates(page);
+  await selectPanel(page, SOURCE_PANEL);
+  await openOperation(page, ROP_PANEL_LABEL);
+  await chooseRopObjective(page, "CNR");
+
+  await expectSearchRefusedWithoutRunning(page);
+});
+
+async function fillTheLargestGridWithDuplicates(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "Fill the largest grid layout with duplicates", async () => {
+    await selectGridLayout(page, LARGEST_GRID_LAYOUT);
+    for (let panel = 2; panel <= LARGEST_GRID_PANEL_COUNT; panel += 1) {
+      await duplicatePanelViaContextMenu(page, SOURCE_PANEL);
+      await expect(panelCanvas(page, panel)).toBeVisible();
+      await expect(duplicateMenuItem(page)).toHaveCount(0);
+    }
+    await expect(panelGrid(page).getByRole("gridcell")).toHaveCount(LARGEST_GRID_PANEL_COUNT);
+  });
+}
+
+function sourcePanelBusyOverlay(page: Page): Locator {
+  return panelCell(page, SOURCE_PANEL)
+    .locator('[role="status"]')
+    .filter({ has: page.locator("svg.animate-spin") });
+}
+
+async function expectSearchRefusedWithoutRunning(page: Page): Promise<void> {
+  await runAsStoryboardStep(page, "Search is marked disabled with an explaining tooltip", async () => {
+    await expect(ropSearchButton(page)).toHaveAttribute("aria-disabled", "true");
+  });
+  await runAsStoryboardStep(page, "The search is refused before any run", async () => {
+    await expect(sourcePanelBusyOverlay(page)).toHaveCount(0);
+    await ropSearchButton(page).click({ force: true });
+    await expect(page.getByText(ROP_PRESS_REFUSED_TEXT)).toBeVisible();
+    await expect(ropSeedReadout(page)).toHaveText(ROP_NO_CANDIDATE_TEXT);
+    await expect(sourcePanelBusyOverlay(page)).toHaveCount(0);
+    expect(await countPanels(page)).toBe(LARGEST_GRID_PANEL_COUNT);
+  });
+}
 
 async function importTheParchmentMask(page: Page): Promise<void> {
   await openMasksOptions(page);

@@ -14,6 +14,7 @@ import {
   selectActiveBandNumber,
   selectFullStackScope,
   setOperationNumberParameter,
+  typeOperationNumberParameter,
 } from "./support/page-objects";
 
 // CT-194 / CT-281: Clip by Value (formerly the Normalize op's clip-absolute
@@ -76,6 +77,25 @@ test("Clip by Value disables Apply until the high bound exceeds the low bound", 
 
   await setOperationNumberParameter(launched.window, CLIP_BY_VALUE, CLIP_HIGH, 1000);
   expect(await isApplyEnabled(launched.window, CLIP_BY_VALUE)).toBe(true);
+});
+
+// CT-350: Wallace could not enter -3 in the clip boxes, because the controlled number
+// input reset itself on the "-" keystroke. The bound must be TYPED (not filled) to prove
+// it; the History label records the true committed bound and band 2 (3,3)=950 clamps
+// down to the 850 high while (0,0)=800 stays in range.
+test("Clip by Value accepts a typed negative low bound", async () => {
+  await openOperation(launched.window, CLIP_BY_VALUE);
+  await selectFullStackScope(launched.window, CLIP_BY_VALUE);
+  await typeOperationNumberParameter(launched.window, CLIP_BY_VALUE, CLIP_LOW, "-3");
+  await setOperationNumberParameter(launched.window, CLIP_BY_VALUE, CLIP_HIGH, 850);
+  await applyOperationInPlace(launched.window, CLIP_BY_VALUE);
+
+  await expectHistoryToRecordOperation(launched.window, {
+    actionLabel: CLIP_BY_VALUE,
+    detailSubstrings: ["Clip to [-3, 850]", "full stack"],
+  });
+  await expectActiveBandReadout(2, BOTTOM_RIGHT, 850);
+  await expectActiveBandReadout(2, TOP_LEFT, 800);
 });
 
 async function applyFullStackClip(lo: number, hi: number): Promise<void> {

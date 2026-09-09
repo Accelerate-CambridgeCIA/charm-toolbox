@@ -19,6 +19,13 @@ export function panelCanvas(page: Page, panelNumber: number): Locator {
   return page.locator(`canvas[aria-label="Panel ${panelNumber}"]`);
 }
 
+// CT-342: the mask overlay canvas renders while the panel's own overlay switch
+// is on and a covering layer is selected on it - independently of which panel is
+// selected and of whether the Masks tool is open.
+export function viewportMaskOverlay(page: Page, panelNumber: number): Locator {
+  return panelCell(page, panelNumber).getByTestId("viewport-mask-overlay");
+}
+
 export async function selectPanel(page: Page, panelNumber: number): Promise<void> {
   await panelCell(page, panelNumber).click();
   await expect(panelCell(page, panelNumber)).toHaveAttribute("aria-selected", "true");

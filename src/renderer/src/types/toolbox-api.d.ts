@@ -252,6 +252,7 @@ interface ToolboxSaveBundleViewportHeaderEntry {
   colorInterpretation?: "rgb";
   masks?: ReadonlyArray<ToolboxSaveBundleMaskLayerDescriptor>;
   selectedMaskIndex?: number | null;
+  isOverlayVisible?: boolean;
 }
 
 interface ToolboxSaveBundleDraftHeader {
@@ -366,6 +367,9 @@ interface ToolboxUserScriptRunBeginRequest {
   // CT-307: when present, count * height * width mask bytes follow the cube
   // bytes on the chunk channel.
   masks?: { count: number };
+  // CT-335: a retained multi-execute session asks main for a resident worker;
+  // absent for one-shot runs, which spawn an interpreter per execute.
+  residentWorker?: boolean;
 }
 
 type ToolboxUserScriptRunBeginResult =
@@ -382,6 +386,10 @@ interface ToolboxUserScriptRunExecuteRequest {
   token: string;
   // CT-307: per-execute parameters for the script's third positional argument.
   params?: Record<string, unknown>;
+  // CT-336: a resident session may run a different built-in module per execute
+  // (ROP's search runs rop_search in the press session); absent means the
+  // session's opening module.
+  builtinModuleName?: ToolboxBuiltinScriptName;
 }
 
 // CT-307: in-script progress pushed from main while a run executes.

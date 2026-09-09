@@ -156,6 +156,27 @@ const CALIBRATE_GROUP: OperationGroup = {
   ],
 };
 
+// CT-346: analysis tools moved to Tools menu (NPC and CNR).
+const ANALYSIS_TOOLS_GROUP: OperationGroup = {
+  key: "analysis-tools",
+  commands: [
+    {
+      id: "npc",
+      label: "NPC",
+      behavior: "open-npc-panel",
+      showInMenu: true,
+      showInToolbar: false,
+    },
+    {
+      id: "cnr",
+      label: "CNR",
+      behavior: "open-cnr-panel",
+      showInMenu: true,
+      showInToolbar: false,
+    },
+  ],
+};
+
 const DATA_GROUP: OperationGroup = {
   key: "data",
   commands: [
@@ -210,28 +231,12 @@ const BAND_OPS_GROUP: OperationGroup = {
   ],
 };
 
-// Stage 6 analyses that produce a SCORE rather than a raster, so they open
-// their own panel instead of the shared tool-options panel (CT-308).
-const ANALYSIS_GROUP: OperationGroup = {
-  key: "analysis",
+// CT-309: random orthogonal projections with press-to-reroll previews. Opens
+// its own panel instead of the shared tool-options panel (CT-308). ROP stays in
+// Multi-band while NPC and CNR moved to Tools (CT-346).
+const ROP_GROUP: OperationGroup = {
+  key: "rop",
   commands: [
-    {
-      id: "npc",
-      label: "NPC",
-      behavior: "open-npc-panel",
-      showInMenu: true,
-      showInToolbar: false,
-    },
-    // CT-320: contrast-to-noise ratio of a chosen text category against a
-    // chosen background category, scored band by band like NPC.
-    {
-      id: "cnr",
-      label: "CNR",
-      behavior: "open-cnr-panel",
-      showInMenu: true,
-      showInToolbar: false,
-    },
-    // CT-309: random orthogonal projections with press-to-reroll previews.
     {
       id: "rop",
       label: "ROP",
@@ -259,6 +264,7 @@ export const TOOLS_MENU: OperationMenu = {
     TRANSFORM_GROUP,
     STACK_PREPARATION_GROUP,
     CALIBRATE_GROUP,
+    ANALYSIS_TOOLS_GROUP,
   ],
 };
 
@@ -276,7 +282,7 @@ export const MULTI_BAND_MENU: OperationMenu = {
     SPECTRAL_DERIVATIVE_GROUP,
     DIMENSION_REDUCTION_GROUP,
     BAND_OPS_GROUP,
-    ANALYSIS_GROUP,
+    ROP_GROUP,
   ],
 };
 
