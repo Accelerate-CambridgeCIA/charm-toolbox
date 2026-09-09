@@ -1,7 +1,7 @@
 {
   "name": "ciag-toolbox",
   "productName": "CHARM Toolbox",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "MSI Toolbox v3 - cross-platform desktop application for multispectral image analysis",
   "author": {
     "name": "Cambridge Image Analysis Group (CIAG)",

@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.6.3](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/compare/v0.6.2...v0.6.3) (2026-09-09)
+
+
+### Features
+
+* **CT-330:** a search refuses before running when its winner could not land ([fd68d73](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/fd68d73e479f291d572b642ea24f8d7e844ab53a))
+* **CT-331:** mask overlay and brush only paint on the selected panel ([b93b75e](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/b93b75eaf39985b78b516743f9ab239e7e418817))
+* **CT-332:** add each picked PNG as a new category of the selected mask layer ([40c21bd](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/40c21bdb847ff2d4f9c9fa58b03844e43e389914))
+* **CT-333:** the rop aside names its source panel and switches on request ([26846ce](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/26846ce73b752d32c060cb8e850fe9db736d4c1a))
+* **CT-334:** python worker session mode with a resident runner ([888ddff](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/888ddffa3128bd9617d5354fdbe78dcc24d63a29))
+* **CT-335:** rop session store uses the resident worker ([c5555e0](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/c5555e00d0d8a8209faca0f8a5ed62114d56ac1f))
+* **CT-336:** rop projects in place and the search reuses the resident session ([0e0e350](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/0e0e3504f54deeecdabeb775e656a80c3f6508b0))
+* **CT-337:** draw several projections per press ([39a8012](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/39a801221592e7fe0f0887375aab99055e66fad4))
+* **CT-338:** shared png chunk writer and 8-bit grayscale png encoder ([195491b](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/195491b460627ab8aae914ea7efdf9d45a6e6e01))
+* **CT-339:** png (8-bit) and png stack save single-band sources as grayscale ([59fa0eb](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/59fa0ebce8312deed36a0a62af5ecad987ce84ad))
+* **CT-340:** e2e round trip for a threshold png import into masks ([03a58d7](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/03a58d7769dff5b38a5c98dcb30a8116633e4868))
+* **CT-341:** concatenate and duplicate renumber bands sequentially ([7d170a9](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/7d170a9282994fc4e4e6dcdf6b7527891b1083e0))
+* **CT-342:** per-panel mask overlay visibility flag gates rendering ([1c1791c](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/1c1791c32dc342d64ab21ce93adf3214901e21f6))
+* **CT-343:** show masks toggle in the panel header ([0c7c4fe](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/0c7c4fe591dba09c2d0e81e030c09511cb835f84))
+* **CT-344:** painting only while the masks tool is active on a visible overlay ([fb3c7c6](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/fb3c7c6108cc9f19db07bd9376a3076eb875b80f))
+* **CT-345:** opening any right-side panel closes every other one ([f363007](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/f363007f3a46328747ea3f582421274064da508e))
+* **CT-346:** move NPC and CNR to the Tools menu ([07d1b38](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/07d1b388fbdea76174368bada8dd5911e1adb6f4))
+* **CT-347:** add dismiss button and 30-second auto-dismiss for non-memory errors ([416b2fd](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/416b2fd885e0a117f7a7cecd03d7dfa8779d3f40))
+* **CT-348:** clamp region drags past the image edge to the boundary ([ff34e28](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/ff34e28c6f6906551be0435cf6782940e9c4faaa))
+* **CT-349:** custom transform panel names the cube shape as (bands, height, width) ([22ca7a8](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/22ca7a88a6620e151288a19044ec4f96d7e7f255))
+* **CT-350:** clip by value accepts a typed negative bound ([ef2609f](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/ef2609f3ffc218a15ef6f0b6fdfaa65cf771b96f))
+* **CT-351:** keep the last spectra wavelength tick label inside the plot ([33a8dc4](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/33a8dc44ace8d5613b98f8f8be7e08b275d7aefb))
+
+
+### Bug Fixes
+
+* **CT-329:** eraser then the same category re-arms mask painting ([4216774](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/4216774cb0cdc1cbe968524727f54583060d8ec8))
+* **CT-347:** fix crashing dismiss action and restore green typecheck/lint/tests ([b840577](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/b8405774eae50a574e533ff8dbb8221b1dfd5b27))
+
+
+### Miscellaneous
+
+* release 0.6.3 ([2d01e76](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/2d01e76148962b9bcdcd08ffbfd7d8fd870b9782))
+
 ## [0.6.2](https://github.com/in-scope/charm-toolbox/compare/v0.6.1...v0.6.2) (2026-09-01)
 
 
