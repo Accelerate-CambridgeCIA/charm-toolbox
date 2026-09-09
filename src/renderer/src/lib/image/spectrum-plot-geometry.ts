@@ -59,6 +59,17 @@ export function computeSpectrumPlotValueRange(
   return { minValue, maxValue };
 }
 
+export type SpectrumTickLabelAnchor = "middle" | "end";
+
+// The last x tick sits padding.right from the svg edge, so a centred four-digit
+// wavelength label ("1100" is about 24px at 10px monospace) spilled past the
+// viewBox and was clipped (CT-351). Anchoring the last label at its end keeps
+// it inside; a lone tick or an inner tick stays centred on its mark.
+export function resolveXTickLabelAnchor(tickIndex: number, tickCount: number): SpectrumTickLabelAnchor {
+  const isLastOfSeveral = tickCount > 1 && tickIndex === tickCount - 1;
+  return isLastOfSeveral ? "end" : "middle";
+}
+
 export function projectXPositionToPixelX(
   position: number,
   xRange: SpectrumPlotXRange,

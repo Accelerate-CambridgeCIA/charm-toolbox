@@ -6,6 +6,7 @@ import {
   computeSpectrumPlotValueRange,
   computeSpectrumPlotXRange,
   DEFAULT_SPECTRUM_PLOT_PADDING,
+  resolveXTickLabelAnchor,
   type SpectrumPlotDimensions,
 } from "@/lib/image/spectrum-plot-geometry";
 import { listContiguousBandRuns } from "@/lib/image/spectrum-band-gaps";
@@ -83,5 +84,20 @@ describe("buildSpectrumStandardDeviationBandPath gap segmentation", () => {
       DIMENSIONS,
     );
     expect((path.match(/Z/g) ?? []).length).toBe(2);
+  });
+});
+
+describe("resolveXTickLabelAnchor (CT-351)", () => {
+  it("centres a lone tick on its mark", () => {
+    expect(resolveXTickLabelAnchor(0, 1)).toBe("middle");
+  });
+
+  it("ends the last of several ticks at its mark so the label stays inside the plot", () => {
+    expect(resolveXTickLabelAnchor(4, 5)).toBe("end");
+  });
+
+  it("centres the first and inner ticks", () => {
+    expect(resolveXTickLabelAnchor(0, 5)).toBe("middle");
+    expect(resolveXTickLabelAnchor(2, 5)).toBe("middle");
   });
 });

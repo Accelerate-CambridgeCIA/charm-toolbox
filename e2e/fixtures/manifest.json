@@ -376,6 +376,44 @@
       }
     ]
   },
+  "enviNirStack": {
+    "headerFileName": "envi-nir-stack.hdr",
+    "binaryFileName": "envi-nir-stack.bin",
+    "width": 4,
+    "height": 4,
+    "bandCount": 3,
+    "dataType": "uint16",
+    "wavelengths": [
+      900,
+      1000,
+      1100
+    ],
+    "bandMeans": [
+      207.5,
+      1007.5,
+      1807.5
+    ],
+    "samplePixels": [
+      {
+        "x": 0,
+        "y": 0,
+        "valuesPerBand": [
+          200,
+          1000,
+          1800
+        ]
+      },
+      {
+        "x": 3,
+        "y": 3,
+        "valuesPerBand": [
+          215,
+          1015,
+          1815
+        ]
+      }
+    ]
+  },
   "enviFloatStack": {
     "headerFileName": "envi-float-stack.hdr",
     "binaryFileName": "envi-float-stack.bin",

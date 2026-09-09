@@ -170,6 +170,7 @@ export const rgbaTiff = manifestJson.rgbaTiff as SingleFileFixture;
 export const paletteColorTiff = manifestJson.paletteColorTiff as SingleFileFixture;
 export const untaggedRgbTiff = manifestJson.untaggedRgbTiff as SingleFileFixture;
 export const enviStack = manifestJson.enviStack as EnviFixture;
+export const enviNirStack = manifestJson.enviNirStack as EnviFixture;
 export const enviFloatStack = manifestJson.enviFloatStack as EnviFixture;
 export const maskMultibandPng = manifestJson.maskMultibandPng as MaskFixture;
 export const maskEightBySquarePng = manifestJson.maskEightBySquarePng as MaskFixture;
