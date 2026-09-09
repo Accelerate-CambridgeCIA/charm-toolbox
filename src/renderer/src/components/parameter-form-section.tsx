@@ -15,6 +15,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { useNumericInputDraft } from "@/components/use-numeric-input-draft";
 import { pickAndRememberReferenceRasterFromDisk } from "@/lib/image/pick-reference-raster";
 import {
   BAND_RANGE_SYNTAX_EXAMPLES,
@@ -292,24 +293,21 @@ interface NumericParameterFieldProps {
 function NumericParameterField(props: NumericParameterFieldProps): JSX.Element {
   const id = useId();
   const stepValue = resolveNumericInputStep(props.schema);
+  const input = useNumericInputDraft(props.value, (next) =>
+    props.onChangeValue(clampNumericParameterValueToSchema(props.schema, next)),
+  );
   return (
     <label htmlFor={id} className="flex flex-col gap-1 text-sm">
       <span className="text-foreground">{props.schema.label}</span>
       <input
         id={id}
         type="number"
-        value={props.value}
+        value={input.draft}
         min={props.schema.min}
         max={props.schema.max}
         step={stepValue}
-        onChange={(event) =>
-          props.onChangeValue(
-            clampNumericParameterValueToSchema(
-              props.schema,
-              parseNumericInputValueOrFallback(event.target.value, props.value),
-            ),
-          )
-        }
+        onChange={(event) => input.onChangeRawValue(event.target.value)}
+        onBlur={input.onBlur}
         className={PANEL_NUMERIC_INPUT_CLASSES}
       />
     </label>
@@ -451,18 +449,18 @@ interface ClipBoundNumberInputProps {
 
 function ClipBoundNumberInput(props: ClipBoundNumberInputProps): JSX.Element {
   const id = useId();
+  const input = useNumericInputDraft(props.value, props.onChangeValue);
   return (
     <label htmlFor={id} className="flex flex-col gap-1 text-sm">
       <span className="text-foreground">{props.label}</span>
       <input
         id={id}
         type="number"
-        value={props.value}
+        value={input.draft}
         step="any"
         aria-invalid={props.invalid}
-        onChange={(event) =>
-          props.onChangeValue(parseNumericInputValueOrFallback(event.target.value, props.value))
-        }
+        onChange={(event) => input.onChangeRawValue(event.target.value)}
+        onBlur={input.onBlur}
         className={cn(PANEL_NUMERIC_INPUT_CLASSES, props.invalid && "border-destructive focus:ring-destructive")}
       />
     </label>

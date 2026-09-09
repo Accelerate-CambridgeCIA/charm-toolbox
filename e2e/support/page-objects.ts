@@ -27,6 +27,7 @@ export {
   setOpenInNewPanel,
   openInNewPanelSwitch,
   setOperationNumberParameter,
+  typeOperationNumberParameter,
   setOperationEnumParameter,
   cancelOperation,
   isApplyEnabled,

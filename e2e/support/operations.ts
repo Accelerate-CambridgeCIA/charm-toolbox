@@ -164,6 +164,29 @@ export async function setOperationNumberParameter(
   );
 }
 
+// CT-350: fill() sets the whole value at once, which a controlled number input
+// accepts even when typing it would fail. Typing keystroke by keystroke is how a
+// leading minus sign reaches the field, so a negative bound must be TYPED here.
+export async function typeOperationNumberParameter(
+  page: Page,
+  operationLabel: string,
+  parameterLabel: string,
+  text: string,
+): Promise<void> {
+  await runAsStoryboardStep(
+    page,
+    `Type ${text} into ${parameterLabel} in the ${operationLabel} panel`,
+    async () => {
+      const field = operationPanel(page, operationLabel).getByLabel(parameterLabel, {
+        exact: true,
+      });
+      await field.fill("");
+      await field.pressSequentially(text);
+      await expect(field).toHaveValue(text);
+    },
+  );
+}
+
 // Enum parameter fields (e.g. Normalize's "Method") render one native <select> in the panel;
 // target it directly, as its wrapping <label> does not resolve reliably via getByLabel for a
 // <select> (mirrors geometric-transform-operation.ts). Pass the option's value, not its label.
