@@ -1,5 +1,7 @@
 # CHARM Toolbox 
-A Toolbox for Cultural Heritage Analysis and Recovery of Multispectral & Hyperspectral Data
+A Toolbox for Cultural Heritage Images Analysis & Recovery with extension to Multi-/Hyperspectral Data
+
+This is output of the project "AI meets cultural heritage: Non-invasive imaging and machine learning techniques for the reconstruction of degraded historical sheet music (PI: Dr Anna Breger)" funded by the Cambridge Centre for Data-Driven Discovery and Accelerate Programme through a donation of Schmidt Sciences. 
 
 [![Latest release](https://img.shields.io/github/v/release/in-scope/ciag-toolbox?include_prereleases)](../../releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue)](../../releases)
