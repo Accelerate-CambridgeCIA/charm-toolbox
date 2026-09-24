@@ -1,7 +1,7 @@
 # CHARM Toolbox 
 A Toolbox for Cultural Heritage Images Analysis & Recovery with extension to Multi-/Hyperspectral Data
 
-This is output of the project "AI meets cultural heritage: Non-invasive imaging and machine learning techniques for the reconstruction of degraded historical sheet music (PI: Dr Anna Breger)" funded by the Cambridge Centre for Data-Driven Discovery and Accelerate Programme through a donation of Schmidt Sciences. 
+This is output of the project "Non-invasive imaging and machine learning techniques for the reconstruction of degraded historical sheet music (PI: Dr Anna Breger)" funded by the Cambridge Centre for Data-Driven Discovery and Accelerate Programme through a donation of Schmidt Sciences. GUI: Evan Morgan (InScope), Methods: Anna Breger and Wallace Peaslee (DAMTP, University of Cambridge).  
 
 [![Latest release](https://img.shields.io/github/v/release/in-scope/ciag-toolbox?include_prereleases)](../../releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue)](../../releases)
