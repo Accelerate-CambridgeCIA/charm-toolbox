@@ -7,7 +7,7 @@ This is output of the project "Non-invasive imaging and machine learning techniq
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue)](../../releases)
 [![Downloads](https://img.shields.io/github/downloads/in-scope/ciag-toolbox/total)](../../releases)
 
-CHARM Toolbox is a desktop application for inspecting, processing and comparing images, built for image analysis in cultural heritage imaging: museum imaging scientists, conservators, and researchers in cultural heritage labs. This tool aims to give you a fast, focused side-by-side viewing surface without having to write a script every time you want to compare two renderings.
+CHARM Toolbox is a desktop application for inspecting, processing and comparing images, built for image analysis in cultural heritage settings: museum imaging scientists, conservators, and researchers working with standard or multi/hyperspectral image data. This tool aims to give you a fast, focused side-by-side viewing surface without having to write a script every time you want to compare two renderings.
 
 This is an early release and still in the stage of testing for a beta version. 
 
