@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/compare/v0.6.3...v0.7.0) (2026-11-03)
+
+
+### Features
+
+* **CT-352:** restructure menus and rename tools per Oct 28 feedback ([0ec0a2e](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/commit/0ec0a2e4f14ef633267147ef09f4a646faa48a3f))
+
 ## [0.6.3](https://github.com/Accelerate-CambridgeCIA/charm-toolbox/compare/v0.6.2...v0.6.3) (2026-09-09)
 
 
