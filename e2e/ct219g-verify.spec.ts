@@ -134,19 +134,19 @@ test("VERIFY custom transform formula run + apply at reference scale", async () 
   const launched = await launchToolboxApp();
   try {
     await openCaptureFromDisk(launched.window, REFERENCE_STACK_PATH, LOAD_BUDGET_MS);
-    await openOperation(launched.window, "Custom Transform");
+    await openOperation(launched.window, "Custom Script");
     const run = await runFormulaMeasuringInteractivity(
       launched.window,
-      "Custom Transform",
+      "Custom Script",
       "Transform formula",
       "cube * 2",
     );
     console.log(`VERIFY transform maxUiGapMs=${run.maxUiGapMs} busy=${run.sawBusyFeedback}`);
     expect(run.maxUiGapMs).toBeLessThan(MAX_UI_GAP_MS);
     expect(run.sawBusyFeedback).toBe(true);
-    const panel = operationPanel(launched.window, "Custom Transform");
+    const panel = operationPanel(launched.window, "Custom Script");
     await expect(panel.getByText("Transform ready: Formula (16 bands)", { exact: true })).toBeVisible();
-    const applied = await applyOperationWithBudget(launched.window, "Custom Transform", APPLY_BUDGET_MS);
+    const applied = await applyOperationWithBudget(launched.window, "Custom Script", APPLY_BUDGET_MS);
     console.log(`VERIFY transform applyMs=${applied.applyMs} applyMaxGapMs=${applied.maxUiGapMs}`);
     await selectPanel(launched.window, 2);
     const pixel = await readReportedPixelNear(launched.window, 2, { x: 2450, y: 1850 }, REFERENCE_DIMENSIONS);

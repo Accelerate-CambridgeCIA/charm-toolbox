@@ -21,18 +21,18 @@ describe("formatRopKeptHistoryLabel", () => {
   it("names the seed alone for an unscored keep", () => {
     expect(
       formatRopKeptHistoryLabel({ seed: 20260822, objectiveLabel: null, score: null }),
-    ).toBe("ROP (seed 20260822)");
+    ).toBe("Random Projections (seed 20260822)");
   });
 
   it("names the seed, objective, and score for a scored keep", () => {
     expect(
       formatRopKeptHistoryLabel({ seed: 7, objectiveLabel: "CNR", score: -4 }),
-    ).toBe("ROP (seed 7, CNR: -4.000)");
+    ).toBe("Random Projections (seed 7, CNR: -4.000)");
   });
 
   it("treats a score without an objective label as unscored", () => {
     expect(formatRopKeptHistoryLabel({ seed: 7, objectiveLabel: null, score: 1 })).toBe(
-      "ROP (seed 7)",
+      "Random Projections (seed 7)",
     );
   });
 });
@@ -46,7 +46,7 @@ describe("formatRopKeptHistoryLabel for a search winner (CT-310)", () => {
         score: 10.733,
         searchedProjectionCount: 50,
       }),
-    ).toBe("ROP search (50 projections, CNR: 10.73)");
+    ).toBe("Random Projections search (50 projections, CNR: 10.73)");
   });
 
   it("names a custom objective by its file name", () => {
@@ -57,7 +57,7 @@ describe("formatRopKeptHistoryLabel for a search winner (CT-310)", () => {
         score: 200.5863,
         searchedProjectionCount: 10000,
       }),
-    ).toBe("ROP search (10000 projections, objective.py: 200.6)");
+    ).toBe("Random Projections search (10000 projections, objective.py: 200.6)");
   });
 
   // The seed drew the whole sequence, not the winning candidate, so it would be
@@ -70,7 +70,7 @@ describe("formatRopKeptHistoryLabel for a search winner (CT-310)", () => {
         score: null,
         searchedProjectionCount: 50,
       }),
-    ).toBe("ROP search (50 projections)");
+    ).toBe("Random Projections search (50 projections)");
   });
 });
 
@@ -85,7 +85,7 @@ describe("formatRopKeptHistoryLabel for a batch press (CT-337)", () => {
         score: null,
         projectionCount: 3,
       }),
-    ).toBe("ROP (seed 20260822, 3 projections)");
+    ).toBe("Random Projections (seed 20260822, 3 projections)");
   });
 
   it("names which projection of the batch a single kept band is", () => {
@@ -97,7 +97,7 @@ describe("formatRopKeptHistoryLabel for a batch press (CT-337)", () => {
         projectionCount: 3,
         projectionIndex: 2,
       }),
-    ).toBe("ROP (seed 20260822, projection 2 of 3, CNR: 1.500)");
+    ).toBe("Random Projections (seed 20260822, projection 2 of 3, CNR: 1.500)");
   });
 
   it("reads exactly as it always did for a one-projection press", () => {
@@ -109,7 +109,7 @@ describe("formatRopKeptHistoryLabel for a batch press (CT-337)", () => {
         projectionCount: 1,
         projectionIndex: 1,
       }),
-    ).toBe("ROP (seed 7, CNR: -4.000)");
+    ).toBe("Random Projections (seed 7, CNR: -4.000)");
   });
 });
 

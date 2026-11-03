@@ -1,5 +1,6 @@
 // Single source of truth for the operation menus (Tools, Basic Processing,
-// Multi-band; CT-289 reorg from the Jul 30 meeting list).
+// Multi-band; CT-289 reorg from the Jul 30 meeting list, CT-352 regroup from
+// the Oct 28 feedback round).
 //
 // Both the native application menu (main process) and the React toolbar
 // (renderer) derive their structure from this catalog so the two surfaces stay
@@ -29,6 +30,7 @@ export type OperationCommandBehavior =
   | "open-npc-panel"
   | "open-cnr-panel"
   | "open-rop-panel"
+  | "import-custom-script"
   | "apply-geometric-transform";
 
 export interface OperationCommand {
@@ -62,6 +64,14 @@ function buildMenuAndToolbarCommand(
 
 function buildMenuOnlyActionCommand(id: string, label: string): OperationCommand {
   return { id, label, behavior: "open-action-panel", showInMenu: true, showInToolbar: false };
+}
+
+function buildHiddenCommand(
+  id: string,
+  label: string,
+  behavior: OperationCommandBehavior,
+): OperationCommand {
+  return { id, label, behavior, showInMenu: false, showInToolbar: false };
 }
 
 function buildToolbarOnlyTransformCommand(
@@ -115,21 +125,28 @@ const CLIP_GROUP: OperationGroup = {
   ],
 };
 
-// CT-289: RGB to Grayscale is a preparation tool; RGB Color Composite is a
-// cross-band operation, so the two live in different menus now.
 const STACK_PREPARATION_GROUP: OperationGroup = {
   key: "stack-preparation",
-  commands: [
-    buildMenuOnlyActionCommand("bit-shift", "Bit Shift"),
-    buildMenuOnlyActionCommand("rgb-to-grayscale", "RGB to Grayscale"),
-  ],
+  commands: [buildMenuOnlyActionCommand("bit-shift", "Bit Shift")],
+};
+
+// CT-300: concatenate two open stacks' bands into one wider stack. CT-352:
+// it combines stacks rather than processing bands, so it sits in Tools.
+const COMBINE_STACKS_GROUP: OperationGroup = {
+  key: "combine-stacks",
+  commands: [buildMenuOnlyActionCommand("concatenate-stacks", "Concatenate Stacks")],
 };
 
 // CT-292: user-facing "False-color Composite" is renamed "RGB Color
-// Composite"; the internal id stays "false-color".
+// Composite"; the internal id stays "false-color". CT-352: RGB to Grayscale
+// joins it here as the inverse colour conversion (it was a Tools preparation
+// step since CT-289).
 const COMPOSITE_GROUP: OperationGroup = {
   key: "composite",
-  commands: [buildMenuOnlyActionCommand("false-color", "RGB Color Composite")],
+  commands: [
+    buildMenuOnlyActionCommand("false-color", "RGB Color Composite"),
+    buildMenuOnlyActionCommand("rgb-to-grayscale", "RGB to Grayscale"),
+  ],
 };
 
 const TRANSFORM_GROUP: OperationGroup = {
@@ -148,6 +165,8 @@ const TRANSFORM_GROUP: OperationGroup = {
   ],
 };
 
+// CT-352: the two reference-based corrections are value processing, so they
+// moved from Tools to Basic Processing.
 const CALIBRATE_GROUP: OperationGroup = {
   key: "calibrate",
   commands: [
@@ -156,13 +175,14 @@ const CALIBRATE_GROUP: OperationGroup = {
   ],
 };
 
-// CT-346: analysis tools moved to Tools menu (NPC and CNR).
+// CT-346: analysis tools moved to Tools menu (NPC and CNR). CT-352: NPC is
+// user-facing "Potential Contrast"; the internal id stays "npc".
 const ANALYSIS_TOOLS_GROUP: OperationGroup = {
   key: "analysis-tools",
   commands: [
     {
       id: "npc",
-      label: "NPC",
+      label: "Potential Contrast",
       behavior: "open-npc-panel",
       showInMenu: true,
       showInToolbar: false,
@@ -224,22 +244,19 @@ const DIMENSION_REDUCTION_GROUP: OperationGroup = {
 // id stays "band-weighting".
 const BAND_OPS_GROUP: OperationGroup = {
   key: "band-ops",
-  commands: [
-    buildMenuOnlyActionCommand("band-weighting", "Weighted Sum"),
-    // CT-300: concatenate two open stacks' bands into one wider stack.
-    buildMenuOnlyActionCommand("concatenate-stacks", "Concatenate Stacks"),
-  ],
+  commands: [buildMenuOnlyActionCommand("band-weighting", "Weighted Sum")],
 };
 
 // CT-309: random orthogonal projections with press-to-reroll previews. Opens
 // its own panel instead of the shared tool-options panel (CT-308). ROP stays in
-// Multi-band while NPC and CNR moved to Tools (CT-346).
+// Multi-band while NPC and CNR moved to Tools (CT-346). CT-352: user-facing
+// "Random Projections"; the internal id stays "rop".
 const ROP_GROUP: OperationGroup = {
   key: "rop",
   commands: [
     {
       id: "rop",
-      label: "ROP",
+      label: "Random Projections",
       behavior: "open-rop-panel",
       showInMenu: true,
       showInToolbar: false,
@@ -247,11 +264,21 @@ const ROP_GROUP: OperationGroup = {
   ],
 };
 
-// Whole-cube user scripting (CT-216).
+// Whole-cube user scripting (CT-216). CT-352: user-facing "Custom Script"
+// (internal id stays "custom-transform"), reached from the top-level Custom
+// Script menu that src/main/menu.ts builds by hand because it also carries the
+// Python Environment and scripting-guide items. Neither command shows in an
+// operation menu or on the toolbar; the menu dispatches them by id.
 const SCRIPTS_GROUP: OperationGroup = {
   key: "scripts",
-  commands: [buildMenuOnlyActionCommand("custom-transform", "Custom Transform")],
+  commands: [
+    buildHiddenCommand("custom-transform", "Custom Script", "open-action-panel"),
+    buildHiddenCommand("custom-transform-import", "Import Script...", "import-custom-script"),
+  ],
 };
+
+export const CUSTOM_SCRIPT_FORMULA_COMMAND_ID = "custom-transform";
+export const CUSTOM_SCRIPT_IMPORT_COMMAND_ID = "custom-transform-import";
 
 // Selecting, reshaping, and preparing a stack: what the image IS, not its
 // values. Group order matters for the toolbar projection (selection,
@@ -263,7 +290,7 @@ export const TOOLS_MENU: OperationMenu = {
     EDIT_REGION_GROUP,
     TRANSFORM_GROUP,
     STACK_PREPARATION_GROUP,
-    CALIBRATE_GROUP,
+    COMBINE_STACKS_GROUP,
     ANALYSIS_TOOLS_GROUP,
   ],
 };
@@ -271,7 +298,7 @@ export const TOOLS_MENU: OperationMenu = {
 // Per-pixel and per-band value processing on the current stack.
 export const BASIC_PROCESSING_MENU: OperationMenu = {
   menuLabel: "Basic Processing",
-  groups: [ADJUST_GROUP, CLIP_GROUP, DATA_GROUP, FILTERS_GROUP, SCRIPTS_GROUP],
+  groups: [ADJUST_GROUP, CLIP_GROUP, DATA_GROUP, FILTERS_GROUP, CALIBRATE_GROUP, SCRIPTS_GROUP],
 };
 
 // Operations across the band dimension or the whole cube.

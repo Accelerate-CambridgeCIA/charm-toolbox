@@ -29,6 +29,7 @@ function buildHandlerSpies(): OperationCommandHandlers & {
     openNpcPanel: bump("openNpcPanel"),
     openCnrPanel: bump("openCnrPanel"),
     openRopPanel: bump("openRopPanel"),
+    importCustomScript: bump("importCustomScript"),
     applyGeometricTransform: bump("applyGeometricTransform"),
   };
 }
@@ -45,8 +46,9 @@ function buildToolbarContext(handlers: OperationCommandHandlers): ToolbarOperati
 }
 
 // CT-284: band-selection deliberately has no menu entry; it is reachable
-// through the Subset Bands editor's "By function" mode.
-const ACTION_IDS_REACHABLE_OUTSIDE_THE_MENUS = new Set(["band-selection"]);
+// through the Subset Bands editor's "By function" mode. CT-352: custom-transform
+// is reached from the hand-built Custom Script menu (src/main/menu.ts).
+const ACTION_IDS_REACHABLE_OUTSIDE_THE_MENUS = new Set(["band-selection", "custom-transform"]);
 
 describe("operation menu catalog wiring", () => {
   // CT-289 catalog completeness: the menu reorg must leave every registered
@@ -77,6 +79,17 @@ describe("operation menu catalog wiring", () => {
     const openSpy = vi.spyOn(handlers, "openActionPanel");
     dispatchOperationCommand("bit-shift", handlers);
     expect(openSpy).toHaveBeenCalledWith(findRegisteredActionById("bit-shift"));
+  });
+
+  // CT-352: the Custom Script menu's two panel items dispatch by id even
+  // though neither command shows in an operation menu or on the toolbar.
+  it("routes the Custom Script menu items to the panel and the script picker", () => {
+    const handlers = buildHandlerSpies();
+    const openSpy = vi.spyOn(handlers, "openActionPanel");
+    dispatchOperationCommand("custom-transform", handlers);
+    dispatchOperationCommand("custom-transform-import", handlers);
+    expect(openSpy).toHaveBeenCalledWith(findRegisteredActionById("custom-transform"));
+    expect(handlers.calls.importCustomScript).toBe(1);
   });
 
   it("routes toggle commands to their toggle handlers", () => {

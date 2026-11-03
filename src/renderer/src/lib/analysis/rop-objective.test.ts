@@ -91,7 +91,7 @@ function threeCategories() {
 
 describe("describeRopObjectiveForHistory", () => {
   it("names the built-in objectives and the custom script's file name", () => {
-    expect(describeRopObjectiveForHistory("npc", null)).toBe("NPC");
+    expect(describeRopObjectiveForHistory("npc", null)).toBe("Potential Contrast");
     expect(describeRopObjectiveForHistory("cnr", null)).toBe("CNR");
     expect(
       describeRopObjectiveForHistory("custom", { filePath: "C:/o.py", fileName: "o.py", source: "" }),

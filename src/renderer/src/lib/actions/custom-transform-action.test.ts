@@ -93,7 +93,7 @@ describe("CUSTOM_TRANSFORM_ACTION", () => {
     );
     expect(seenSources).toEqual([{ mode: "import", scriptPath: "C:/tools/transform-tool.py" }]);
     expect(CUSTOM_TRANSFORM_ACTION.formatAppliedLabel!(prepared)).toBe(
-      "Custom transform (transform-tool.py)",
+      "Custom script (transform-tool.py)",
     );
   });
 
@@ -134,7 +134,7 @@ describe("CUSTOM_TRANSFORM_ACTION", () => {
       "whole-image",
     );
     expect(CUSTOM_TRANSFORM_ACTION.formatAppliedLabel!(prepared)).toBe(
-      "Custom transform (np.diff(cube, axis=0))",
+      "Custom script (np.diff(cube, axis=0))",
     );
   });
 

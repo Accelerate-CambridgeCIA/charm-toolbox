@@ -70,6 +70,7 @@ function buildIdleToolbarContext(): ToolbarOperationGroupContext {
       openNpcPanel: () => {},
       openCnrPanel: () => {},
       openRopPanel: () => {},
+      importCustomScript: () => {},
       applyGeometricTransform: () => {},
     },
     getActionAvailability: () => ({ isAvailable: true }),

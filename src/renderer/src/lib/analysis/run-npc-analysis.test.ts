@@ -120,7 +120,7 @@ describe("computeNpcScoreShowingPanelBusy", () => {
     const outcome = await runNpcAgainst(api);
     expect(outcome.status).toBe("failed");
     if (outcome.status === "failed") {
-      expect(outcome.message).toContain("one NPC score per band (expected 1, got 2)");
+      expect(outcome.message).toContain("one Potential Contrast score per band (expected 1, got 2)");
     }
   });
 
@@ -130,7 +130,7 @@ describe("computeNpcScoreShowingPanelBusy", () => {
     const outcome = await runNpcAgainst(api);
     expect(outcome.status).toBe("failed");
     if (outcome.status === "failed") {
-      expect(outcome.message).toContain("NPC score 1 must be a finite number");
+      expect(outcome.message).toContain("Potential Contrast score 1 must be a finite number");
     }
   });
 

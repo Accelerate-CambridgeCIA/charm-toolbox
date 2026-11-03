@@ -17,13 +17,13 @@ import { runAsStoryboardStep } from "./support/storyboard-step";
 
 // CT-291: the CT-277 "Open in a new panel" switch (and its off-state helper
 // text) is replaced by a two-option segmented control labeled "Result" ("New
-// panel" / "Replace current panel"), rendered at both sites it always was: the
+// panel" / "Replace panel"), rendered at both sites it always was: the
 // tool-options panel footer and the Subset Bands editor. The underlying
 // boolean state plumbing and the default (New panel) are unchanged.
 //
 // Fixture: multiband-12bit.tif (4x4, 3 bands uint16; pixel (0,0) band 1 = 100).
 // Oracle: Invert on bounded uint16 data is a photographic-negative reflection
-// (out = 65535 - in), so selecting "Replace current panel" and applying must
+// (out = 65535 - in), so selecting "Replace panel" and applying must
 // flip the SOURCE panel's readout to exactly 65535 - 100 via the pixel-readout
 // oracle.
 
@@ -60,7 +60,7 @@ test("both Result options render in a tool panel and in Subset Bands", async () 
   });
 });
 
-test("selecting Replace current panel and applying replaces the source panel", async () => {
+test("selecting Replace panel and applying replaces the source panel", async () => {
   const page = launched.window;
 
   await openOperation(page, INVERT);
@@ -72,5 +72,5 @@ test("selecting Replace current panel and applying replaces the source panel", a
 
 async function expectResultSegmentsRenderWithin(container: Locator): Promise<void> {
   await expect(container.getByRole("radio", { name: "New panel" })).toBeVisible();
-  await expect(container.getByRole("radio", { name: "Replace current panel" })).toBeVisible();
+  await expect(container.getByRole("radio", { name: "Replace panel" })).toBeVisible();
 }

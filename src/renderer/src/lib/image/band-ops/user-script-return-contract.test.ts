@@ -77,9 +77,9 @@ describe("validateBandSelectionReturnValue", () => {
 // CT-318: the same one-number-per-band contract, named for its consumer.
 describe("validatePerBandNumberListReturnValue", () => {
   const npcScores: PerBandNumberListSubject = {
-    listName: "The NPC score list",
-    elementName: "NPC score",
-    onePerBandPhrase: "one NPC score per band",
+    listName: "The Potential Contrast score list",
+    elementName: "Potential Contrast score",
+    onePerBandPhrase: "one Potential Contrast score per band",
   };
 
   it("accepts a list holding one finite number per band", () => {
@@ -88,19 +88,19 @@ describe("validatePerBandNumberListReturnValue", () => {
 
   it("names the consumer's subject when the length is wrong", () => {
     expect(() => validatePerBandNumberListReturnValue([0.5], 3, npcScores)).toThrow(
-      "The NPC score list must have one NPC score per band (expected 3, got 1).",
+      "The Potential Contrast score list must have one Potential Contrast score per band (expected 3, got 1).",
     );
   });
 
   it("names the consumer's element when an entry is not a finite number", () => {
     expect(() => validatePerBandNumberListReturnValue([0.5, Number.NaN], 2, npcScores)).toThrow(
-      /NPC score 2 must be a finite number/,
+      /Potential Contrast score 2 must be a finite number/,
     );
   });
 
   it("refuses a bare number where a per-band list is required", () => {
     expect(() => validatePerBandNumberListReturnValue(0.5, 1, npcScores)).toThrow(
-      /The NPC score list must be an array/,
+      /The Potential Contrast score list must be an array/,
     );
   });
 });

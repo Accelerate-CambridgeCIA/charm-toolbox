@@ -360,7 +360,7 @@ async function expectCandidatePanelToHoldTheWholeBatch(page: Page): Promise<void
   await runAsStoryboardStep(page, "Panel 2's History names the whole batch", async () => {
     await expectHistoryToRecordOperation(page, {
       actionLabel: ROP_PANEL_LABEL,
-      detailSubstrings: [`ROP (seed ${FORCED_SEED}, ${PROJECTIONS_PER_PRESS} projections)`],
+      detailSubstrings: [`Random Projections (seed ${FORCED_SEED}, ${PROJECTIONS_PER_PRESS} projections)`],
     });
   });
 }
@@ -449,7 +449,7 @@ async function expectRopCandidateToHaveSurvivedTheSelectionChange(page: Page): P
 
 async function closeRopOptions(page: Page): Promise<void> {
   await runAsStoryboardStep(page, "Close the ROP options aside", async () => {
-    await ropOptionsPanel(page).getByRole("button", { name: "Close ROP options" }).click();
+    await ropOptionsPanel(page).getByRole("button", { name: "Close Random Projections options" }).click();
     await expect(ropOptionsPanel(page)).toBeHidden();
   });
 }
@@ -558,7 +558,7 @@ async function expectFrozenPanelHistoryToEndWithTheFirstSeedsRopEntry(page: Page
   await selectPanel(page, CANDIDATE_PANEL);
   await expectHistoryToRecordOperation(page, {
     actionLabel: ROP_PANEL_LABEL,
-    detailSubstrings: [`ROP (seed ${FORCED_SEED})`],
+    detailSubstrings: [`Random Projections (seed ${FORCED_SEED})`],
   });
   await runAsStoryboardStep(page, "Keep appended nothing to the frozen panel's History", async () => {
     const entries = await readHistoryEntries(page);
@@ -597,7 +597,7 @@ async function expectCandidatePanelIsAOneBandStackWithOneRopHistoryEntry(page: P
   await runAsStoryboardStep(page, "Panel 2's History ends with one ROP entry", async () => {
     await expectHistoryToRecordOperation(page, {
       actionLabel: ROP_PANEL_LABEL,
-      detailSubstrings: [`ROP (seed ${FORCED_SEED}, CNR: ${EXPECTED_SCORE_TEXT})`],
+      detailSubstrings: [`Random Projections (seed ${FORCED_SEED}, CNR: ${EXPECTED_SCORE_TEXT})`],
     });
     const entries = await readHistoryEntries(page);
     const ropEntries = entries.filter((entry) => entry.actionLabel === ROP_PANEL_LABEL);
@@ -643,7 +643,7 @@ async function expectMaskObjectivesLockedWithAnExplanation(page: Page): Promise<
       true,
     );
     await expect(ropOptionsPanel(page)).toContainText(
-      "NPC and CNR need a mask layer with at least two categories that have painted pixels.",
+      "Potential Contrast and CNR need a mask layer with at least two categories that have painted pixels.",
     );
     await expect(ropNewProjectionButton(page)).toBeEnabled();
     await expect(ropScoreReadout(page)).toHaveCount(0);

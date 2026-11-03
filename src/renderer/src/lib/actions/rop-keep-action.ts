@@ -89,7 +89,7 @@ function buildRopStackAction(
 ): RegisteredViewportAction {
   return {
     id: ROP_KEEP_ACTION_ID,
-    label: "ROP",
+    label: "Random Projections",
     icon: ROP_PANEL_ICON,
     successMessage,
     appliedLabel: formatRopKeptHistoryLabel(request),

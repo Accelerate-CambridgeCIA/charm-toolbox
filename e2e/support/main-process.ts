@@ -1,5 +1,6 @@
 import type { ElectronApplication } from "@playwright/test";
 
+import { CUSTOM_SCRIPT_MENU_LABEL } from "../../src/shared/custom-script-menu";
 import { OPERATION_MENUS } from "../../src/shared/operation-menu-catalog";
 
 const OPERATION_MENU_LABELS = OPERATION_MENUS.map((menu) => menu.menuLabel);
@@ -123,9 +124,9 @@ export function triggerOperationMenuItem(
   }, { label: operationLabel, menuLabels: OPERATION_MENU_LABELS });
 }
 
-// CT-289: clicks File > Grid > <layout> ("1x2", ...), the native mirror of the
-// toolbar's grid-layout dropdown.
-export function triggerFileGridLayoutMenuItem(
+// CT-289: clicks View > Grid > <layout> ("1x2", ...), the native mirror of the
+// toolbar's grid-layout dropdown (CT-352 moved the submenu from File to View).
+export function triggerViewGridLayoutMenuItem(
   app: ElectronApplication,
   layout: string,
 ): Promise<void> {
@@ -136,12 +137,32 @@ export function triggerFileGridLayoutMenuItem(
       submenu?: { items: RawMenuNode[] };
     }
     const menu = Menu.getApplicationMenu() as unknown as { items: RawMenuNode[] } | null;
-    const file = (menu?.items ?? []).find((item) => item.label === "File");
-    const grid = file?.submenu?.items.find((item) => item.label === "Grid");
+    const view = (menu?.items ?? []).find((item) => item.label === "View");
+    const grid = view?.submenu?.items.find((item) => item.label === "Grid");
     const target = grid?.submenu?.items.find((item) => item.label === targetLayout);
-    if (!target?.click) throw new Error(`No File > Grid > "${targetLayout}" menu item`);
+    if (!target?.click) throw new Error(`No View > Grid > "${targetLayout}" menu item`);
     target.click();
   }, layout);
+}
+
+// CT-352: clicks an item of the hand-built top-level Custom Script menu by its
+// exact label ("Enter Inline Formula", "Import Script...", ...).
+export function triggerCustomScriptMenuItem(
+  app: ElectronApplication,
+  itemLabel: string,
+): Promise<void> {
+  return app.evaluate(({ Menu }, { label, menuLabel }) => {
+    interface RawMenuNode {
+      label: string;
+      click?: () => void;
+      submenu?: { items: RawMenuNode[] };
+    }
+    const menu = Menu.getApplicationMenu() as unknown as { items: RawMenuNode[] } | null;
+    const customScript = (menu?.items ?? []).find((item) => item.label === menuLabel);
+    const target = customScript?.submenu?.items.find((item) => item.label === label);
+    if (!target?.click) throw new Error(`No ${menuLabel} > "${label}" menu item`);
+    target.click();
+  }, { label: itemLabel, menuLabel: CUSTOM_SCRIPT_MENU_LABEL });
 }
 
 export function triggerSaveProjectMenuItem(app: ElectronApplication): Promise<void> {

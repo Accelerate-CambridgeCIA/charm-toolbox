@@ -63,7 +63,7 @@ export interface NpcOptionsPanelProps {
 
 export function NpcOptionsPanel(props: NpcOptionsPanelProps): JSX.Element {
   return (
-    <aside aria-label="NPC options" className={NPC_PANEL_CLASSES}>
+    <aside aria-label="Potential Contrast options" className={NPC_PANEL_CLASSES}>
       <NpcPanelHeader
         viewportNumber={props.target?.viewportNumber ?? null}
         onClose={props.onClose}
@@ -106,11 +106,11 @@ function NpcPanelCloseButton({ onClose }: { readonly onClose: () => void }): JSX
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Close NPC options" onClick={onClose}>
+        <Button variant="ghost" size="icon" aria-label="Close Potential Contrast options" onClick={onClose}>
           <X className="size-4" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent>Close NPC options</TooltipContent>
+      <TooltipContent>Close Potential Contrast options</TooltipContent>
     </Tooltip>
   );
 }
@@ -252,7 +252,7 @@ function NpcPerBandScores(props: NpcPerBandScoresProps): JSX.Element {
   );
 }
 
-const NPC_SCORE_NAME = "NPC";
+const NPC_SCORE_NAME = "Potential Contrast";
 const NOT_COMPUTED_YET_TEXT = "Not computed yet";
 // NPC is defined on 0..1, so the plot keeps that scale rather than magnifying
 // the noise between three nearly equal bands.

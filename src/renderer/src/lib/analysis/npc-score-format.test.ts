@@ -35,12 +35,12 @@ describe("formatNpcHistoryAppliedLabel", () => {
   it("records the mask layer, the bin count, and the single band it scored", () => {
     expect(
       formatNpcHistoryAppliedLabel("Parchment mask", 255, buildTopBandRows([0.9999999999999991])),
-    ).toBe("NPC (Parchment mask, 255 bins): Band 1 1.000");
+    ).toBe("Potential Contrast (Parchment mask, 255 bins): Band 1 1.000");
   });
 
   it("names every top row in list order", () => {
     expect(formatNpcHistoryAppliedLabel("Parchment mask", 2, buildTopBandRows([1, 0.5, 0.25]))).toBe(
-      "NPC (Parchment mask, 2 bins): Band 1 1.000, Band 2 0.5000, Band 3 0.2500",
+      "Potential Contrast (Parchment mask, 2 bins): Band 1 1.000, Band 2 0.5000, Band 3 0.2500",
     );
   });
 
@@ -51,7 +51,7 @@ describe("formatNpcHistoryAppliedLabel", () => {
       buildTopBandRows([0.9, 0.8, 0.7, 0.6, 0.5]),
     );
     expect(label).toBe(
-      "NPC (Parchment mask, 255 bins): Band 1 0.9000, Band 2 0.8000, Band 3 0.7000, Band 4 0.6000, Band 5 0.5000",
+      "Potential Contrast (Parchment mask, 255 bins): Band 1 0.9000, Band 2 0.8000, Band 3 0.7000, Band 4 0.6000, Band 5 0.5000",
     );
   });
 });

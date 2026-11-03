@@ -1,19 +1,23 @@
-import { useCallback } from "react";
-import { notifyError } from "@/lib/notifications/notify";
+import { useMemo } from "react";
 
 import { ScriptDocsLink } from "@/components/script-docs-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  buildConfiguredCubeTransformSetterForViewport,
+  pickCustomScriptFileIntoConfiguredTransform,
+  type ConfiguredCubeTransformSetter,
+} from "@/lib/actions/import-custom-script";
+import {
   buildFormulaCubeTransformState,
-  buildImportedToolCubeTransformState,
   formatCubeTransformStatusLine,
   type CubeTransformEditingState,
 } from "@/lib/image/band-ops/cube-transform-editing";
 import { useViewportRendering } from "@/state/viewport-rendering-context";
 
-// The custom-transform controls embedded in the Custom Transform operation
-// panel. The editor only CONFIGURES the run: the formula text writes through
+// The custom-transform controls embedded in the Custom Script operation
+// panel (user-facing "Custom Script" since CT-352; internal names keep
+// "custom transform"). The editor only CONFIGURES the run: the formula text writes through
 // to ViewportRenderingState.cubeTransform as the user types, and Import
 // script... just picks a .py/.zip file path (no Python runs here). Apply is
 // what uploads the cube, runs the worker, and opens the transformed stack;
@@ -49,17 +53,14 @@ export function ToolOptionsCustomTransformEditor(
 
 interface CubeTransformBinding {
   state: CubeTransformEditingState | null;
-  setConfiguredTransform: (next: CubeTransformEditingState | null) => void;
+  setConfiguredTransform: ConfiguredCubeTransformSetter;
 }
 
 function useCubeTransformBinding(viewportIndex: number): CubeTransformBinding {
   const renderingApi = useViewportRendering();
   const state = renderingApi.getRenderingState(viewportIndex).cubeTransform;
-  const setConfiguredTransform = useCallback(
-    (next: CubeTransformEditingState | null) => {
-      const current = renderingApi.getRenderingState(viewportIndex);
-      renderingApi.setRenderingState(viewportIndex, { ...current, cubeTransform: next });
-    },
+  const setConfiguredTransform = useMemo(
+    () => buildConfiguredCubeTransformSetterForViewport(renderingApi, viewportIndex),
     [renderingApi, viewportIndex],
   );
   return { state, setConfiguredTransform };
@@ -98,24 +99,13 @@ function CustomTransformFormulaField(props: CustomTransformControlProps): JSX.El
 }
 
 function ImportCustomTransformScriptButton(props: CustomTransformControlProps): JSX.Element {
-  const pickScriptFile = () => pickCustomTransformScriptFile(props.binding.setConfiguredTransform);
+  const pickScriptFile = () =>
+    pickCustomScriptFileIntoConfiguredTransform(props.binding.setConfiguredTransform);
   return (
     <Button type="button" variant="outline" size="sm" onClick={() => void pickScriptFile()}>
       Import script...
     </Button>
   );
-}
-
-async function pickCustomTransformScriptFile(
-  setConfiguredTransform: (next: CubeTransformEditingState | null) => void,
-): Promise<void> {
-  try {
-    const picked = await window.toolboxApi.pickUserScriptFile();
-    if (picked.canceled) return;
-    setConfiguredTransform(buildImportedToolCubeTransformState(picked.filePath, picked.fileName));
-  } catch (error) {
-    notifyError(error instanceof Error ? error.message : String(error));
-  }
 }
 
 function CustomTransformStatus({ state }: { state: CubeTransformEditingState | null }): JSX.Element {

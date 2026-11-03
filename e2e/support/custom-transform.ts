@@ -13,7 +13,7 @@ import { runAsStoryboardStep } from "./storyboard-step";
 // run and closes only on success (keepsPanelOpenUntilApplySucceeds): a failed
 // run leaves it open, input intact, for correction and re-Apply.
 
-export const CUSTOM_TRANSFORM_OPERATION_LABEL = "Custom Transform";
+export const CUSTOM_TRANSFORM_OPERATION_LABEL = "Custom Script";
 
 export const CUSTOM_TRANSFORM_FORMULA_SET_STATUS = "Formula set. Apply runs it on the stack.";
 
@@ -91,7 +91,7 @@ export async function expectCustomTransformPanelStillOpen(page: Page): Promise<v
 }
 
 export function customTransformFailureToast(page: Page): Locator {
-  return page.locator("[data-sonner-toast]").filter({ hasText: /Custom Transform failed/i });
+  return page.locator("[data-sonner-toast]").filter({ hasText: /Custom Script failed/i });
 }
 
 function customTransformRunBusyOverlays(page: Page): Locator {

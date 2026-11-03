@@ -319,13 +319,13 @@ describe.skipIf(interpreterPath === null)("python worker integration (bundled ru
     expect(outcome).toEqual({ kind: "completed", value: 2 });
   }, 60_000);
 
-  it("rejects importing an unbundled package (statsmodels) in bundled mode, pointing at View > Python Environment", async () => {
+  it("rejects importing an unbundled package (statsmodels) in bundled mode, pointing at Custom Script > Python Environment", async () => {
     const outcome = await runSandboxedScript("def run():\n    import statsmodels\n    return 'imported'\n");
     expect(outcome).toMatchObject({ kind: "failed", reason: "script-error" });
     const message = (outcome as { userFacingMessage: string }).userFacingMessage;
     expect(message).toContain("import 'statsmodels'");
     expect(message).toContain("blocked in bundled mode");
-    expect(message).toContain("View > Python Environment");
+    expect(message).toContain("Custom Script > Python Environment");
   }, 60_000);
 
   function listBundledRuntimeImportNames(): string[] {

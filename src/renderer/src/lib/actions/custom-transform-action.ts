@@ -48,7 +48,7 @@ const CUSTOM_TRANSFORM_SCRIPT_PATH_PARAMETER_ID = "customTransformScriptPath";
 const CUSTOM_TRANSFORM_DESCRIPTION_PARAMETER_ID = "customTransformDescription";
 
 const NO_TRANSFORM_CONFIGURED_MESSAGE =
-  "Custom transform needs a formula or an imported tool. Enter one first.";
+  "Custom script needs a formula or an imported tool. Enter one first.";
 
 export type CubeTransformScriptRunner = (
   raster: RasterImage,
@@ -59,10 +59,10 @@ export type CubeTransformScriptRunner = (
 
 export const CUSTOM_TRANSFORM_ACTION: RegisteredViewportAction = {
   id: CUSTOM_TRANSFORM_ACTION_ID,
-  label: "Custom Transform",
+  label: "Custom Script",
   icon: Wand2,
-  successMessage: "Custom transform applied",
-  appliedLabel: "Custom transform",
+  successMessage: "Custom script applied",
+  appliedLabel: "Custom script",
   loadingMessage: "Running the transform on the stack...",
   keepsPanelOpenUntilApplySucceeds: true,
   formatAppliedLabel: formatCustomTransformAppliedLabel,
@@ -191,6 +191,6 @@ function readSourceBandMetadata(raster: RasterImage): TransformSourceBandMetadat
 
 function formatCustomTransformAppliedLabel(parameterValues: ParameterValuesById): string {
   const description = parameterValues[CUSTOM_TRANSFORM_DESCRIPTION_PARAMETER_ID];
-  if (typeof description === "string") return `Custom transform (${description})`;
-  return "Custom transform";
+  if (typeof description === "string") return `Custom script (${description})`;
+  return "Custom script";
 }

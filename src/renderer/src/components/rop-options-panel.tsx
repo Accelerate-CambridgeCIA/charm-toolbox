@@ -121,7 +121,7 @@ export interface RopOptionsPanelProps {
 
 export function RopOptionsPanel(props: RopOptionsPanelProps): JSX.Element {
   return (
-    <aside aria-label="ROP options" className={ROP_PANEL_CLASSES}>
+    <aside aria-label="Random Projections options" className={ROP_PANEL_CLASSES}>
       <RopPanelHeader
         viewportNumber={props.target?.viewportNumber ?? null}
         onClose={props.onClose}
@@ -166,11 +166,11 @@ function RopPanelCloseButton({ onClose }: { readonly onClose: () => void }): JSX
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Close ROP options" onClick={onClose}>
+        <Button variant="ghost" size="icon" aria-label="Close Random Projections options" onClick={onClose}>
           <X className="size-4" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent>Close ROP options</TooltipContent>
+      <TooltipContent>Close Random Projections options</TooltipContent>
     </Tooltip>
   );
 }
@@ -237,7 +237,7 @@ interface RopSourcePanelSectionProps {
 function RopSourcePanelSection(props: RopSourcePanelSectionProps): JSX.Element {
   return (
     <div className="flex flex-col items-start gap-1">
-      <output aria-label="ROP source panel" className="text-xs text-muted-foreground">
+      <output aria-label="Random Projections source panel" className="text-xs text-muted-foreground">
         {describeRopSourcePanel(props.sourcePanelNumber)}
       </output>
       <UseSelectedPanelButton offer={props.repinOffer} isRunning={props.isRunning} />
@@ -300,7 +300,7 @@ interface RopControllerProps {
 
 const OBJECTIVE_LABELS: Record<RopObjectiveKind, string> = {
   none: "None",
-  npc: "NPC",
+  npc: "Potential Contrast",
   cnr: "CNR",
   custom: "Custom script",
 };
@@ -428,7 +428,7 @@ function RopCandidateReadout({ controller }: RopControllerProps): JSX.Element {
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs font-medium text-muted-foreground">Current candidate</span>
-      <output aria-label="ROP seed" className="font-mono text-sm text-foreground">
+      <output aria-label="Random Projections seed" className="font-mono text-sm text-foreground">
         {describeCurrentRopCandidate(controller.current)}
       </output>
       <RopCandidateScoreReadout controller={controller} />
@@ -455,7 +455,7 @@ function describeCurrentRopCandidate(current: RopCandidate | null): string {
 function RopCandidateScoreReadout({ controller }: RopControllerProps): JSX.Element {
   if (controller.objectiveKind === "none") return <></>;
   if (controller.candidateBatchRaster === null) {
-    return <RopScoreLine ariaLabel="ROP score" score={controller.current?.scores[0] ?? null} />;
+    return <RopScoreLine ariaLabel="Random Projections score" score={controller.current?.scores[0] ?? null} />;
   }
   return (
     <PerBandScoreSection
@@ -476,7 +476,7 @@ function RopBestCandidateReadout({ controller }: RopControllerProps): JSX.Elemen
       <span className="text-xs font-medium text-muted-foreground">
         Best so far ({describeBestRopProjection(best)})
       </span>
-      <RopScoreLine ariaLabel="Best ROP score" score={best.score} />
+      <RopScoreLine ariaLabel="Best Random Projections score" score={best.score} />
       <Button
         type="button"
         variant="outline"

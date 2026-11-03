@@ -27,7 +27,7 @@ export interface RopCustomObjectiveScript {
 }
 
 export const ROP_OBJECTIVES_NEED_TWO_PAINTED_CATEGORIES =
-  "NPC and CNR need a mask layer with at least two categories that have painted pixels.";
+  "Potential Contrast and CNR need a mask layer with at least two categories that have painted pixels.";
 
 // The scored objectives read the layer the Masks tool has selected when it
 // qualifies, otherwise the first qualifying layer, mirroring the NPC panel's
@@ -81,7 +81,7 @@ export function describeRopObjectiveForHistory(
   kind: RopObjectiveKind,
   customScript: RopCustomObjectiveScript | null,
 ): string | null {
-  if (kind === "npc") return "NPC";
+  if (kind === "npc") return "Potential Contrast";
   if (kind === "cnr") return "CNR";
   if (kind === "custom") return customScript?.fileName ?? "Custom script";
   return null;

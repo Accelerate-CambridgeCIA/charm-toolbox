@@ -39,12 +39,12 @@ const NPC_BUILTIN_SOURCE: ToolboxRunUserScriptSource = {
 };
 
 const NPC_RETURNED_NO_SCORE =
-  "The NPC analysis did not return a score. Please report this as a bug.";
+  "The Potential Contrast analysis did not return a score. Please report this as a bug.";
 
 const NPC_SCORE_LIST_SUBJECT: PerBandNumberListSubject = {
-  listName: "The NPC score list",
-  elementName: "NPC score",
-  onePerBandPhrase: "one NPC score per band",
+  listName: "The Potential Contrast score list",
+  elementName: "Potential Contrast score",
+  onePerBandPhrase: "one Potential Contrast score per band",
 };
 
 export async function computeNpcScoreShowingPanelBusy(
