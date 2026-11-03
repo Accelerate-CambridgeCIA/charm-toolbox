@@ -71,3 +71,13 @@ mac:
   artifactName: ${productName}-${version}-${arch}.${ext}
 dmg:
   writeUpdateInfo: false
+linux:
+  target:
+    - target: deb
+      arch: x64
+  icon: build/icon.png
+  category: Graphics
+  executableName: charm-toolbox
+  maintainer: Cambridge Image Analysis Group (CIAG) <evan.morgan@inscope.sh>
+  synopsis: Multispectral image analysis
+  artifactName: charm-toolbox_${version}_${arch}.${ext}

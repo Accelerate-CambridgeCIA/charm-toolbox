@@ -40,6 +40,10 @@ const PINNED_RUNTIME_DOWNLOADS = {
     target: "aarch64-apple-darwin",
     sha256: "3724aa4dafb5f7b6c2cf98e89914e4248dc6bd2fe40407df4a2d73de99615f16",
   },
+  "linux-x64": {
+    target: "x86_64-unknown-linux-gnu",
+    sha256: "9fa869d69be54f6b8eeae64272fbd9bb0646e0e1a8da9d80e51ba5a3bee48930",
+  },
 };
 
 function pinnedDownloadForThisMachineOrThrow() {

@@ -4,7 +4,7 @@ This document is for maintainers. End-user installation instructions live in [RE
 
 ## Cutting a release
 
-Releases are produced by the `Release` GitHub Actions workflow at `.github/workflows/release.yml`, which builds the Windows installer and the two macOS dmgs in parallel and uploads them to a GitHub Release named after the tag.
+Releases are produced by the `Release` GitHub Actions workflow at `.github/workflows/release.yml`, which builds the Windows installer, the two macOS dmgs and the Linux deb in parallel and uploads them to a GitHub Release named after the tag.
 
 To cut a release, push a semver tag matching `v*.*.*` from the branch you want to release:
 
@@ -21,5 +21,6 @@ For development verification on your own machine:
 
 - Windows: `pnpm build:win` produces an unsigned NSIS installer under `dist/`.
 - macOS: `pnpm build:mac` produces unsigned x64 and arm64 dmgs under `dist/`.
+- Linux: `pnpm build:linux` produces an x64 `.deb` under `dist/` (install with `sudo apt install ./dist/charm-toolbox_<version>_amd64.deb`).
 
 Cross-platform builds without the matching native packaging tools (`hdiutil` for dmg, `signtool` for Windows signing) are not supported and will fail. The CI workflow handles each platform on its native runner.

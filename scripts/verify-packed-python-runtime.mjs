@@ -18,11 +18,11 @@ function packedResourcesDirectory(appOutDir, electronPlatformName, productFilena
 }
 
 function interpreterRelativePath(electronPlatformName) {
-  return electronPlatformName === "darwin" ? join("bin", "python3") : "python.exe";
+  return electronPlatformName === "win32" ? "python.exe" : join("bin", "python3");
 }
 
 function sitePackagesDirectoryOrNull(runtimeDirectory, electronPlatformName) {
-  if (electronPlatformName !== "darwin") return join(runtimeDirectory, "Lib", "site-packages");
+  if (electronPlatformName === "win32") return join(runtimeDirectory, "Lib", "site-packages");
   const libDirectory = join(runtimeDirectory, "lib");
   if (!existsSync(libDirectory)) return null;
   const versionedDirectoryName = readdirSync(libDirectory).find((name) => /^python3\.\d+$/.test(name));
