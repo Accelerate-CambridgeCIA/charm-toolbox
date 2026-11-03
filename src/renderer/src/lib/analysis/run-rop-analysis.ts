@@ -43,7 +43,7 @@ const ROP_SEARCH_MODULE_NAME: ToolboxBuiltinScriptName = "rop_search";
 const ROP_RUN_BUSY_LABEL = "Running analysis...";
 
 const ROP_RETURNED_NO_CANDIDATE =
-  "The ROP run did not return a projection. Please report this as a bug.";
+  "The Random Projections run did not return a projection. Please report this as a bug.";
 const SEARCH_RETURNED_NO_PROJECTION =
   "The projection search did not return a projection. Please report this as a bug.";
 const CUSTOM_OBJECTIVE_NEEDS_ONE_FINITE_NUMBER =
@@ -311,7 +311,7 @@ async function scoreCandidateWithBuiltinNpc(
   api?: UserScriptRunChunkedApi,
 ): Promise<RopScoreOutcome> {
   if (request.maskLayer === null) {
-    return { status: "failed", message: "NPC needs a qualifying mask layer." };
+    return { status: "failed", message: "Potential Contrast needs a qualifying mask layer." };
   }
   const outcome = await computeNpcScoreShowingPanelBusy(
     {
@@ -331,7 +331,7 @@ function describeNpcObjectiveOutcome(outcome: NpcAnalysisOutcome): RopScoreOutco
   if (outcome.status !== "computed") return outcome;
   return describeFiniteScoreOutcome(
     outcome.scores[0] ?? Number.NaN,
-    "The NPC score is not a finite number.",
+    "The Potential Contrast score is not a finite number.",
   );
 }
 

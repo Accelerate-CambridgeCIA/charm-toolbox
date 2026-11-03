@@ -22,5 +22,5 @@ export function formatNpcHistoryAppliedLabel(
   topBandRows: ReadonlyArray<PerBandScoreRow>,
 ): string {
   const rowList = formatPerBandScoreRowList(topBandRows, formatNpcScoreToSignificantFigures);
-  return `NPC (${maskLayerName}, ${bins} bins): ${rowList}`;
+  return `Potential Contrast (${maskLayerName}, ${bins} bins): ${rowList}`;
 }

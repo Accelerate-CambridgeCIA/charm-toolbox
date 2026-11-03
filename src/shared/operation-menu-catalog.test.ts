@@ -28,34 +28,36 @@ describe("operation menu structure (CT-289 Jul 30 meeting list)", () => {
 
   // Operation menus present flat and alphabetical (no separators), so each
   // expectation below is the exact list a user sees, in order.
-  it("puts selection, geometry, stack preparation, and analysis tools under Tools", () => {
+  // CT-352 (Oct 28 feedback): Concatenate Stacks joins Tools; RGB to
+  // Grayscale, Flat-field and Spectralon leave it; NPC reads "Potential
+  // Contrast".
+  it("puts selection, geometry, stack preparation, stack combining, and analysis tools under Tools", () => {
     expect(listMenuItemLabels(findMenuByLabel("Tools"))).toEqual([
       "Bit Shift",
       "CNR",
+      "Concatenate Stacks",
       "Crop to Region",
-      "Flat-field Correction",
       "Flip",
       "Masks",
-      "NPC",
-      "RGB to Grayscale",
+      "Potential Contrast",
       "Rotate",
       "Select Region",
-      "Spectralon Calibration",
       "Subset Bands",
     ]);
   });
 
-  it("puts per-pixel and per-band value processing under Basic Processing", () => {
+  it("puts per-pixel and per-band value processing, including the reference corrections, under Basic Processing", () => {
     expect(listMenuItemLabels(findMenuByLabel("Basic Processing"))).toEqual([
       "Brightness & Contrast",
       "Clip by Value",
       "Contrast Curve",
-      "Custom Transform",
       "Denoise",
+      "Flat-field Correction",
       "Frequency Filters",
       "Invert",
       "Normalize",
       "Percentile Clip",
+      "Spectralon Calibration",
       "Standardize",
       "Threshold",
     ]);
@@ -63,18 +65,32 @@ describe("operation menu structure (CT-289 Jul 30 meeting list)", () => {
 
   it("puts cross-band and whole-cube operations under Multi-band", () => {
     expect(listMenuItemLabels(findMenuByLabel("Multi-band"))).toEqual([
-      "Concatenate Stacks",
       "ICA",
       "L2 Minimization",
       "Local MNF",
       "Local PCA",
       "MNF",
       "PCA",
+      "Random Projections",
       "RGB Color Composite",
-      "ROP",
+      "RGB to Grayscale",
       "Spectral Derivative",
       "Weighted Sum",
     ]);
+  });
+
+  // CT-352: the Custom Script panel is reached from the hand-built top-level
+  // Custom Script menu (src/main/menu.ts), never from an operation menu or the
+  // toolbar, so its two commands are hidden from both projections.
+  it("keeps the Custom Script commands out of every operation menu and off the toolbar", () => {
+    const hidden = listAllOperationCommands().filter(
+      (command) => command.id === "custom-transform" || command.id === "custom-transform-import",
+    );
+    expect(hidden.map((command) => command.label)).toEqual(["Custom Script", "Import Script..."]);
+    for (const command of hidden) {
+      expect(command.showInMenu).toBe(false);
+      expect(command.showInToolbar).toBe(false);
+    }
   });
 
   it("sorts every operation menu's items alphabetically", () => {

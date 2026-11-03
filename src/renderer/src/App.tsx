@@ -128,6 +128,11 @@ import {
 } from "@/lib/actions/threshold-action";
 import { shouldEmbedBandWeightingEditorInOperationPanel } from "@/lib/actions/band-weighting-editor-placement";
 import { shouldEmbedCustomTransformEditorInOperationPanel } from "@/lib/actions/custom-transform-editor-placement";
+import { CUSTOM_TRANSFORM_ACTION } from "@/lib/actions/custom-transform-action";
+import {
+  buildConfiguredCubeTransformSetterForViewport,
+  pickCustomScriptFileIntoConfiguredTransform,
+} from "@/lib/actions/import-custom-script";
 import { shouldEmbedToneCurveEditorInOperationPanel } from "@/lib/actions/tone-curve-editor-placement";
 import {
   listKeptBandIndexesFromRemoved,
@@ -591,6 +596,12 @@ function ApplicationShell(): JSX.Element {
         "rop",
         regionRequestHandlers.rightSidePanelClosers,
         setIsRopPanelOpen,
+      ),
+    importCustomScript: () =>
+      openCustomScriptPanelAndPickScript(
+        singleSelectedSource,
+        renderingApi,
+        regionRequestHandlers.openActionPanel,
       ),
     singleSelectedSource,
     applyActionFlowBindings,
@@ -1063,7 +1074,7 @@ function appendAnalysisScoreToHistoryAtViewport(
   });
 }
 
-const NPC_ANALYSIS_ENTRY: AnalysisHistoryEntryIdentity = { actionId: "npc", actionLabel: "NPC" };
+const NPC_ANALYSIS_ENTRY: AnalysisHistoryEntryIdentity = { actionId: "npc", actionLabel: "Potential Contrast" };
 const CNR_ANALYSIS_ENTRY: AnalysisHistoryEntryIdentity = { actionId: "cnr", actionLabel: "CNR" };
 
 function writeMaskPanelStateAtViewport(
@@ -1261,6 +1272,7 @@ interface OperationCommandHandlerBindings {
   readonly openNpcPanel: () => void;
   readonly openCnrPanel: () => void;
   readonly openRopPanel: () => void;
+  readonly importCustomScript: () => void;
   readonly singleSelectedSource: SingleSelectedSource | null;
   readonly applyActionFlowBindings: ApplyActionFlowBindings;
 }
@@ -1276,6 +1288,7 @@ function buildOperationCommandHandlers(
     openNpcPanel: bindings.openNpcPanel,
     openCnrPanel: bindings.openCnrPanel,
     openRopPanel: bindings.openRopPanel,
+    importCustomScript: bindings.importCustomScript,
     applyGeometricTransform: (transform) =>
       applyQuickGeometricTransformToActiveSource(
         transform,
@@ -1283,6 +1296,21 @@ function buildOperationCommandHandlers(
         bindings.applyActionFlowBindings,
       ),
   };
+}
+
+// CT-352: Custom Script > Import Script... is the panel's own "Import
+// script..." button reached from the menu bar: open the panel, then pick. With
+// no single selected panel the panel still opens and explains itself.
+function openCustomScriptPanelAndPickScript(
+  source: SingleSelectedSource | null,
+  renderingApi: ViewportRenderingApi,
+  openActionPanel: (action: RegisteredViewportAction) => void,
+): void {
+  openActionPanel(CUSTOM_TRANSFORM_ACTION);
+  if (source === null) return;
+  void pickCustomScriptFileIntoConfiguredTransform(
+    buildConfiguredCubeTransformSetterForViewport(renderingApi, source.index),
+  );
 }
 
 function applyQuickGeometricTransformToActiveSource(

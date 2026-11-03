@@ -4,19 +4,19 @@ import type { Locator, Page } from "@playwright/test";
 import { runAsStoryboardStep } from "./storyboard-step";
 
 // CT-308: "NPC" is a menu-only Multi-band command that opens
-// <aside aria-label="NPC options">. The panel computes scores and shows them to
+// <aside aria-label="Potential Contrast options">. The panel computes scores and shows them to
 // four significant figures; it never places a raster, so it has a Compute
 // button instead of Apply and no result-destination control.
 //
 // CT-319: the result is one score PER BAND, presented as a line plot plus a
 // "Top bands" list. There is no scalar readout to read any more: the oracle is
-// the list of rows, each <output aria-label="NPC top band N">.
+// the list of rows, each <output aria-label="Potential Contrast top band N">.
 
-export const NPC_PANEL_LABEL = "NPC";
+export const NPC_PANEL_LABEL = "Potential Contrast";
 export const NPC_NOT_COMPUTED_TEXT = "Not computed yet";
 
 export function npcOptionsPanel(page: Page): Locator {
-  return page.locator('aside[aria-label="NPC options"]');
+  return page.locator('aside[aria-label="Potential Contrast options"]');
 }
 
 export function npcMaskLayerPicker(page: Page): Locator {
@@ -32,7 +32,7 @@ export function npcComputeButton(page: Page): Locator {
 }
 
 export function npcScoresSection(page: Page): Locator {
-  return npcOptionsPanel(page).locator('section[aria-label="NPC scores"]');
+  return npcOptionsPanel(page).locator('section[aria-label="Potential Contrast scores"]');
 }
 
 export function npcScorePlot(page: Page): Locator {
@@ -40,7 +40,7 @@ export function npcScorePlot(page: Page): Locator {
 }
 
 export function npcTopBandRows(page: Page): Locator {
-  return npcScoresSection(page).locator('output[aria-label^="NPC top band "]');
+  return npcScoresSection(page).locator('output[aria-label^="Potential Contrast top band "]');
 }
 
 export async function setNpcBinCount(page: Page, bins: number): Promise<void> {

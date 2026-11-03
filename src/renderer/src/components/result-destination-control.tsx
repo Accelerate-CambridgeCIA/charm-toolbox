@@ -29,7 +29,7 @@ export function ResultDestinationControl(props: ResultDestinationControlProps): 
           New panel
         </ToggleGroupItem>
         <ToggleGroupItem value="replace-current-panel" className="flex-1">
-          Replace current panel
+          Replace panel
         </ToggleGroupItem>
       </ToggleGroup>
     </div>

@@ -12,12 +12,21 @@ import {
 } from "./theme-controller";
 import type { ThemeMode } from "./theme-state";
 import {
+  CUSTOM_SCRIPT_FORMULA_COMMAND_ID,
+  CUSTOM_SCRIPT_IMPORT_COMMAND_ID,
   listMenuCommandsAlphabetically,
   OPERATION_MENUS,
   type OperationCommand,
   type OperationMenu,
 } from "../shared/operation-menu-catalog";
 import { SELECTABLE_GRID_LAYOUTS, type GridLayout } from "../shared/grid-layouts";
+import {
+  CUSTOM_SCRIPT_MENU_LABEL,
+  ENTER_INLINE_FORMULA_MENU_ITEM_LABEL,
+  HOW_TO_WRITE_SCRIPT_MENU_ITEM_LABEL,
+  IMPORT_SCRIPT_MENU_ITEM_LABEL,
+  PYTHON_ENVIRONMENT_MENU_ITEM_LABEL,
+} from "../shared/custom-script-menu";
 
 const isRunningOnMac = process.platform === "darwin";
 const isRunningInDevMode = process.env.NODE_ENV === "development";
@@ -106,8 +115,8 @@ function sendGridLayoutSelectionToRenderer(
   window.webContents.send(MENU_SELECT_GRID_LAYOUT_CHANNEL, layout);
 }
 
-// CT-289: the File menu mirrors the toolbar's grid layouts, after the project
-// items.
+// CT-289: the grid layouts submenu mirrors the toolbar's layout dropdown.
+// CT-352: it lives under View (it was under File after the project items).
 function buildGridLayoutsSubmenu(window: BrowserWindow): MenuItemConstructorOptions {
   return {
     label: "Grid",
@@ -128,8 +137,6 @@ function buildFileMenu(window: BrowserWindow): MenuItemConstructorOptions {
       buildOpenProjectMenuItem(window),
       buildSaveProjectMenuItem(window),
       buildSaveProjectAsMenuItem(window),
-      { type: "separator" },
-      buildGridLayoutsSubmenu(window),
       { type: "separator" },
       isRunningOnMac ? { role: "close" } : { role: "quit" },
     ],
@@ -209,21 +216,25 @@ function buildPythonEnvironmentMenuItem(
   window: BrowserWindow,
 ): MenuItemConstructorOptions {
   return {
-    label: "Python Environment...",
+    label: PYTHON_ENVIRONMENT_MENU_ITEM_LABEL,
     click: () => sendMenuChannelToRenderer(window, "menu:python-environment"),
   };
 }
+
+// CT-352: the client asked for "Full Screen on/off" over Electron's default
+// "Toggle Full Screen"; the role keeps the platform accelerator and behaviour.
+const FULL_SCREEN_MENU_ITEM_LABEL = "Full Screen on/off";
 
 function buildViewMenuSubmenu(
   window: BrowserWindow,
 ): MenuItemConstructorOptions[] {
   return [
-    buildThemeSubmenu(),
+    buildGridLayoutsSubmenu(window),
     { type: "separator" },
-    buildPythonEnvironmentMenuItem(window),
+    buildThemeSubmenu(),
     ...buildDeveloperRefreshMenuItems(),
     { type: "separator" },
-    { role: "togglefullscreen" },
+    { role: "togglefullscreen", label: FULL_SCREEN_MENU_ITEM_LABEL },
   ];
 }
 
@@ -245,19 +256,47 @@ function buildAboutMenuItem(
 
 function buildHowToWriteScriptMenuItem(): MenuItemConstructorOptions {
   return {
-    label: "How to Write a Custom Script",
+    label: HOW_TO_WRITE_SCRIPT_MENU_ITEM_LABEL,
     click: () => void shell.openExternal(SCRIPTING_DOCS_URL),
+  };
+}
+
+// CT-352: a top-level Custom Script menu gathers everything about user
+// scripting, in the order the client listed: the interpreter choice (from
+// View), the scripting guide (from Help), and the two ways into the Custom
+// Script panel (formerly Basic Processing > Custom Transform). The two panel
+// items dispatch catalog commands by id like any operation menu item.
+function buildEnterInlineFormulaMenuItem(window: BrowserWindow): MenuItemConstructorOptions {
+  return {
+    label: ENTER_INLINE_FORMULA_MENU_ITEM_LABEL,
+    click: () => sendMenuCommandToRenderer(window, CUSTOM_SCRIPT_FORMULA_COMMAND_ID),
+  };
+}
+
+function buildImportScriptMenuItem(window: BrowserWindow): MenuItemConstructorOptions {
+  return {
+    label: IMPORT_SCRIPT_MENU_ITEM_LABEL,
+    click: () => sendMenuCommandToRenderer(window, CUSTOM_SCRIPT_IMPORT_COMMAND_ID),
+  };
+}
+
+function buildCustomScriptMenu(window: BrowserWindow): MenuItemConstructorOptions {
+  return {
+    label: CUSTOM_SCRIPT_MENU_LABEL,
+    submenu: [
+      buildPythonEnvironmentMenuItem(window),
+      buildHowToWriteScriptMenuItem(),
+      { type: "separator" },
+      buildEnterInlineFormulaMenuItem(window),
+      buildImportScriptMenuItem(window),
+    ],
   };
 }
 
 function buildHelpMenu(window: BrowserWindow): MenuItemConstructorOptions {
   return {
     role: "help",
-    submenu: [
-      buildHowToWriteScriptMenuItem(),
-      { type: "separator" },
-      buildAboutMenuItem(window),
-    ],
+    submenu: [buildAboutMenuItem(window)],
   };
 }
 
@@ -268,6 +307,7 @@ function buildMenuTemplateForPlatform(
   if (isRunningOnMac) template.push(buildMacAppMenu());
   template.push(buildFileMenu(window));
   template.push(...buildOperationMenus(window));
+  template.push(buildCustomScriptMenu(window));
   template.push(buildViewMenu(window));
   template.push(buildHelpMenu(window));
   return template;

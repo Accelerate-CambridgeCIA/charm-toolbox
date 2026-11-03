@@ -200,14 +200,14 @@ describe("deliverRopCandidateToPanel", () => {
     const live = await deliverRopCandidateToPanel(REQUEST, SOURCE_INDEX, null, bindings, "frozen");
     expect(Array.from(live?.raster.bandPixels[0] ?? [])).toEqual([3, 4]);
     const history = bindings.getRenderingState(CANDIDATE_INDEX).operationHistory;
-    expect(history.map((entry) => entry.appliedLabel)).toEqual(["ROP (seed 7)"]);
+    expect(history.map((entry) => entry.appliedLabel)).toEqual(["Random Projections (seed 7)"]);
   });
 
   it("writes the source's History plus one ROP entry on the candidate panel", async () => {
     const bindings = bindingsWith("1x2", 2, [SOURCE_INDEX]);
     await deliverRopCandidateToPanel(REQUEST, SOURCE_INDEX, null, bindings);
     const history = bindings.getRenderingState(CANDIDATE_INDEX).operationHistory;
-    expect(history.map((entry) => entry.appliedLabel)).toEqual(["ROP (seed 7)"]);
+    expect(history.map((entry) => entry.appliedLabel)).toEqual(["Random Projections (seed 7)"]);
   });
 });
 

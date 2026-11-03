@@ -79,7 +79,7 @@ function describeExpectedHistoryDetail(bins: number, scores: ReadonlyArray<numbe
   const rows = describeExpectedTopBandRows(scores)
     .map((row) => `${row.bandIdentityText} ${formatScoreAsThePanelDoes(row.score)}`)
     .join(", ");
-  return `NPC (${MASK_LAYER_NAME}, ${bins} bins): ${rows}`;
+  return `Potential Contrast (${MASK_LAYER_NAME}, ${bins} bins): ${rows}`;
 }
 
 function expectTopBandRowsMatchReference(
@@ -165,7 +165,7 @@ async function importTheParchmentMask(page: Page): Promise<void> {
 
 async function closeNpcOptions(page: Page): Promise<void> {
   await runAsStoryboardStep(page, "Close the NPC options aside", async () => {
-    await npcOptionsPanel(page).getByRole("button", { name: "Close NPC options" }).click();
+    await npcOptionsPanel(page).getByRole("button", { name: "Close Potential Contrast options" }).click();
     await expect(npcOptionsPanel(page)).toBeHidden();
   });
 }
@@ -193,7 +193,7 @@ async function expectPanelBlockedWithAnExplanation(page: Page): Promise<void> {
 async function expectThePlotIsOnScreen(page: Page): Promise<void> {
   await runAsStoryboardStep(page, "See the per-band score plot", async () => {
     await expect(npcScorePlot(page)).toBeVisible();
-    await expect(npcScorePlot(page).getByRole("img", { name: "NPC per band plot" })).toBeVisible();
+    await expect(npcScorePlot(page).getByRole("img", { name: "Potential Contrast per band plot" })).toBeVisible();
   });
 }
 

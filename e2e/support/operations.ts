@@ -1,9 +1,13 @@
 import { expect } from "@playwright/test";
 import type { ElectronApplication, Locator, Page } from "@playwright/test";
 
+import {
+  CUSTOM_SCRIPT_MENU_LABEL,
+  ENTER_INLINE_FORMULA_MENU_ITEM_LABEL,
+} from "../../src/shared/custom-script-menu";
 import { listAllOperationCommands } from "../../src/shared/operation-menu-catalog";
 import { electronApplicationForWindow } from "./launch-app";
-import { triggerOperationMenuItem } from "./main-process";
+import { triggerCustomScriptMenuItem, triggerOperationMenuItem } from "./main-process";
 import { runAsStoryboardStep } from "./storyboard-step";
 
 // Operations are launched from their REAL user entry point, decided by the
@@ -38,6 +42,15 @@ async function launchOperationFromItsEntryPoint(
     await applicationToolbar(page)
       .getByRole("button", { name: operationLabel, exact: true })
       .click();
+    return;
+  }
+  // CT-352: the Custom Script panel has no operation-menu entry; its real
+  // entry point is Custom Script > Enter Inline Formula.
+  if (operationLabel === CUSTOM_SCRIPT_MENU_LABEL) {
+    await triggerCustomScriptMenuItem(
+      electronApplicationForWindow(page),
+      ENTER_INLINE_FORMULA_MENU_ITEM_LABEL,
+    );
     return;
   }
   await triggerOperationMenuItem(electronApplicationForWindow(page), operationLabel);
@@ -104,7 +117,7 @@ function operationBusyOverlays(page: Page): Locator {
 
 // The operation panel defaults to "Result: New panel", so Apply places the result in a
 // FRESH panel and leaves the source untouched. An in-place spec (asserting the SOURCE panel's
-// readout/Metadata/History changed) must select "Replace current panel" first; otherwise the
+// readout/Metadata/History changed) must select "Replace panel" first; otherwise the
 // source keeps its pre-op values and the History entry lands on the new result panel, not the
 // source. CT-291: the CT-277 switch was replaced by this two-option segmented control.
 export function openInNewPanelSwitch(page: Page, operationLabel: string): Locator {
@@ -118,7 +131,7 @@ export async function setOpenInNewPanel(
 ): Promise<void> {
   await runAsStoryboardStep(
     page,
-    `Set ${operationLabel}'s Result control to ${shouldOpenInNewPanel ? "New panel" : "Replace current panel"}`,
+    `Set ${operationLabel}'s Result control to ${shouldOpenInNewPanel ? "New panel" : "Replace panel"}`,
     async () => {
       await selectResultDestinationSegment(operationPanel(page, operationLabel), shouldOpenInNewPanel);
     },
@@ -131,7 +144,7 @@ export async function selectResultDestinationSegment(
   container: Locator,
   shouldOpenInNewPanel: boolean,
 ): Promise<void> {
-  const segmentName = shouldOpenInNewPanel ? "New panel" : "Replace current panel";
+  const segmentName = shouldOpenInNewPanel ? "New panel" : "Replace panel";
   const segment = container.getByRole("radio", { name: segmentName });
   await segment.click();
   await expect(segment).toHaveAttribute("aria-checked", "true");

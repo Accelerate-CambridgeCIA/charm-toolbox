@@ -1,6 +1,6 @@
 appId: sh.inscope.ciag.toolbox
 productName: CHARM Toolbox
-copyright: Copyright (c) 2026 Cambridge Image Analysis Group (CIAG)
+copyright: Copyright (c) 2026 Cambridge Image Analysis (CIA)
 directories:
   buildResources: build
   output: dist

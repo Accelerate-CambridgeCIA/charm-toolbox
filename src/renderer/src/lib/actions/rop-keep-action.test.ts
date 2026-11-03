@@ -60,10 +60,10 @@ describe("buildRopKeepAction", () => {
       score: 0.25,
       objectiveLabel: "CNR",
     });
-    expect(unscored.appliedLabel).toBe("ROP (seed 20260822)");
-    expect(scored.appliedLabel).toBe("ROP (seed 20260822, CNR: 0.2500)");
+    expect(unscored.appliedLabel).toBe("Random Projections (seed 20260822)");
+    expect(scored.appliedLabel).toBe("Random Projections (seed 20260822, CNR: 0.2500)");
     expect(scored.id).toBe(ROP_KEEP_ACTION_ID);
-    expect(scored.label).toBe("ROP");
+    expect(scored.label).toBe("Random Projections");
   });
 
   it("toasts 'Projection kept'", () => {
@@ -122,7 +122,7 @@ describe("buildRopCandidateDeliveryAction", () => {
     expect(delivery.action.id).toBe(kept.id);
     expect(delivery.action.label).toBe(kept.label);
     expect(delivery.action.icon).toBe(kept.icon);
-    expect(delivery.action.appliedLabel).toBe("ROP (seed 20260822, CNR: 0.2500)");
+    expect(delivery.action.appliedLabel).toBe("Random Projections (seed 20260822, CNR: 0.2500)");
   });
 });
 
@@ -148,7 +148,7 @@ describe("a batch delivery (CT-337)", () => {
 
   it("records how many projections the stack holds in its History label", () => {
     expect(buildRopKeepAction(batchRequest).appliedLabel).toBe(
-      "ROP (seed 20260822, 3 projections)",
+      "Random Projections (seed 20260822, 3 projections)",
     );
   });
 
@@ -165,7 +165,7 @@ describe("a batch delivery (CT-337)", () => {
       objectiveLabel: "CNR",
       projectionIndex: 2,
     });
-    expect(action.appliedLabel).toBe("ROP (seed 20260822, projection 2 of 3, CNR: 1.500)");
+    expect(action.appliedLabel).toBe("Random Projections (seed 20260822, projection 2 of 3, CNR: 1.500)");
   });
 });
 

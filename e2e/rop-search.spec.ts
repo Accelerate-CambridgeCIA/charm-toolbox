@@ -287,7 +287,7 @@ async function importTheParchmentMask(page: Page): Promise<void> {
 
 async function closeRopOptions(page: Page): Promise<void> {
   await runAsStoryboardStep(page, "Close the ROP options aside", async () => {
-    await ropOptionsPanel(page).getByRole("button", { name: "Close ROP options" }).click();
+    await ropOptionsPanel(page).getByRole("button", { name: "Close Random Projections options" }).click();
     await expect(ropOptionsPanel(page)).toBeHidden();
   });
 }
@@ -362,7 +362,7 @@ async function expectResultPanelIsAOneBandStackWhoseHistoryNamesTheSearch(page: 
   await expectHistoryToRecordOperation(page, {
     actionLabel: ROP_PANEL_LABEL,
     detailSubstrings: [
-      `ROP search (${SEARCHED_PROJECTION_COUNT} projections, ${OBJECTIVE_SCRIPT_FILE_NAME}: ${EXPECTED_SCORE_TEXT})`,
+      `Random Projections search (${SEARCHED_PROJECTION_COUNT} projections, ${OBJECTIVE_SCRIPT_FILE_NAME}: ${EXPECTED_SCORE_TEXT})`,
     ],
   });
 }

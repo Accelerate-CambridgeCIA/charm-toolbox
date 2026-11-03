@@ -120,7 +120,7 @@ def _sandbox_reject(attempted_capability):
     raise PermissionError(
         "This script tried to " + attempted_capability + ", which is blocked in bundled mode. "
         "To allow it, switch to your own Python environment (an unsandboxed, trusted mode): "
-        "open View > Python Environment and point the toolbox at your interpreter."
+        "open Custom Script > Python Environment and point the toolbox at your interpreter."
     )
 
 

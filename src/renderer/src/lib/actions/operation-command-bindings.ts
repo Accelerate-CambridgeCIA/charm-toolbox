@@ -45,6 +45,9 @@ export interface OperationCommandHandlers {
   readonly openNpcPanel: () => void;
   readonly openCnrPanel: () => void;
   readonly openRopPanel: () => void;
+  // CT-352: Custom Script > Import Script... opens the Custom Script panel and
+  // launches the script picker in one go.
+  readonly importCustomScript: () => void;
   readonly applyGeometricTransform: (transform: GeometricTransform) => void;
 }
 
@@ -75,6 +78,8 @@ function runOperationCommandBehavior(
       return handlers.openCnrPanel();
     case "open-rop-panel":
       return handlers.openRopPanel();
+    case "import-custom-script":
+      return handlers.importCustomScript();
     case "apply-geometric-transform":
       return applyGeometricTransformForCommand(command, handlers);
   }
@@ -213,6 +218,8 @@ function buildToolbarOperationItem(
     case "open-cnr-panel":
       return null;
     case "open-rop-panel":
+      return null;
+    case "import-custom-script":
       return null;
     case "apply-geometric-transform":
       return buildQuickTransformItem(command, context);

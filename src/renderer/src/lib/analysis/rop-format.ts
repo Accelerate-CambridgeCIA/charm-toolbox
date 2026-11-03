@@ -21,14 +21,14 @@ export interface RopKeptLabelInputs {
   readonly projectionIndex?: number | null;
 }
 
-// "ROP (seed 20260822)" unscored; "ROP (seed 20260822, CNR: 1.234)" scored;
-// "ROP (seed 20260822, 3 projections)" for a whole batch; "ROP (seed 20260822,
+// "Random Projections (seed 20260822)" unscored; "Random Projections (seed 20260822, CNR: 1.234)" scored;
+// "Random Projections (seed 20260822, 3 projections)" for a whole batch; "Random Projections (seed 20260822,
 // projection 2 of 3, CNR: 1.234)" for one band of a batch; "ROP search
 // (50 projections, CNR: 1.234)" for a search winner.
 export function formatRopKeptHistoryLabel(inputs: RopKeptLabelInputs): string {
   const searched = describeSearchedProjectionsOrNull(inputs);
   if (searched !== null) return searched;
-  return `ROP (${joinLabelParts([describeSeedAndProjections(inputs), describeObjectiveScoreOrNull(inputs)])})`;
+  return `Random Projections (${joinLabelParts([describeSeedAndProjections(inputs), describeObjectiveScoreOrNull(inputs)])})`;
 }
 
 // A search winner is never described by its seed: the seed drew the whole
@@ -39,7 +39,7 @@ function describeSearchedProjectionsOrNull(inputs: RopKeptLabelInputs): string |
   const count = inputs.searchedProjectionCount ?? null;
   if (count === null) return null;
   const parts = [`${count} projections`, describeObjectiveScoreOrNull(inputs)];
-  return `ROP search (${joinLabelParts(parts)})`;
+  return `Random Projections search (${joinLabelParts(parts)})`;
 }
 
 function describeSeedAndProjections(inputs: RopKeptLabelInputs): string {

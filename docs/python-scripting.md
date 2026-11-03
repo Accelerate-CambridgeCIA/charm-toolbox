@@ -107,7 +107,7 @@ The limit measures SILENCE, not total run time. A script that takes a third `par
 
 ## Your own Python environment (opt-in)
 
-For a tool with arbitrary third-party dependencies, point the toolbox at your own interpreter or virtual environment under View > Python Environment. This own environment is trusted and unsandboxed, so only run code you trust; the wall-clock and memory limits still apply. The toolbox never installs packages.
+For a tool with arbitrary third-party dependencies, point the toolbox at your own interpreter or virtual environment under Custom Script > Python Environment. This own environment is trusted and unsandboxed, so only run code you trust; the wall-clock and memory limits still apply. The toolbox never installs packages.
 
 ## Template scripts
 

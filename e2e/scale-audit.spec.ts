@@ -702,18 +702,18 @@ test("T23 band selection formula python run (JSON tolist of 48 MP band)", async 
 
 test("T24 custom transform formula python run (raw float32 frame, 120s wall clock)", async () => {
   await loadReferenceStack();
-  await openOperation(launched.window, "Custom Transform");
+  await openOperation(launched.window, "Custom Script");
   const startedAt = Date.now();
   await startUiHeartbeat(launched.window);
   await fillFormulaAndClickRunWithBudget(
     launched.window,
-    "Custom Transform",
+    "Custom Script",
     "Transform formula",
     "cube * 2",
     SCRIPT_RUN_BUDGET_MS,
   );
   const outcome = await waitForScriptOutcome(async () => {
-    const status = await operationPanel(launched.window, "Custom Transform")
+    const status = await operationPanel(launched.window, "Custom Script")
       .getByText("Transform ready:", { exact: false })
       .innerText()
       .catch(() => "");
@@ -731,7 +731,7 @@ test("T24 custom transform formula python run (raw float32 frame, 120s wall cloc
     });
     return;
   }
-  const timing = await applyOperationWithBudget(launched.window, "Custom Transform", APPLY_BUDGET_MS);
+  const timing = await applyOperationWithBudget(launched.window, "Custom Script", APPLY_BUDGET_MS);
   const oracle = await verifyResultBandOne((x, y) => 2 * referenceValue(0, x, y), 0.5);
   recordAuditResult({
     area: "python round trip: Custom Transform formula (structured-clone cube IPC + raw float32 response frame, 120 s wall clock)",
@@ -749,18 +749,18 @@ test("T24 custom transform formula python run (raw float32 frame, 120s wall cloc
 
 test("T25 custom transform imported tool at scale", async () => {
   await loadReferenceStack();
-  await openOperation(launched.window, "Custom Transform");
+  await openOperation(launched.window, "Custom Script");
   await enqueueOpenDialogPaths(launched.window, [fixturePath("transform-tool.py")]);
   const startedAt = Date.now();
   await startUiHeartbeat(launched.window);
   await clickPanelButtonWithBudget(
     launched.window,
-    "Custom Transform",
+    "Custom Script",
     "Import script...",
     SCRIPT_RUN_BUDGET_MS,
   );
   const outcome = await waitForScriptOutcome(async () => {
-    const status = await operationPanel(launched.window, "Custom Transform")
+    const status = await operationPanel(launched.window, "Custom Script")
       .getByText("Transform ready:", { exact: false })
       .innerText()
       .catch(() => "");

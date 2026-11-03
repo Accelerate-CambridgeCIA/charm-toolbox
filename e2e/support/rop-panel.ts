@@ -4,14 +4,14 @@ import type { Locator, Page } from "@playwright/test";
 import { runAsStoryboardStep } from "./storyboard-step";
 
 // CT-309: "ROP" is a menu-only Multi-band command that opens
-// <aside aria-label="ROP options">. CT-316: New projection delivers a fresh
+// <aside aria-label="Random Projections options">. CT-316: New projection delivers a fresh
 // random candidate as a one-band stack in a candidate panel next to the source
 // (the next press replaces it); Keep / Keep best commit a candidate as a new
 // stack. Launch the app with MSI_E2E_ROP_FORCED_SEED to make every press
 // reproduce the reference candidate pinned in manifest.json, and change the
 // seed between presses with setForcedRopSeed.
 
-export const ROP_PANEL_LABEL = "ROP";
+export const ROP_PANEL_LABEL = "Random Projections";
 export const ROP_NO_CANDIDATE_TEXT = "No projection yet";
 export const ROP_PROJECTION_READY_TEXT = "Projection ready";
 export const ROP_PRESS_REFUSED_TEXT = "Every panel is in use. Close a panel before projecting.";
@@ -23,7 +23,7 @@ export async function setForcedRopSeed(page: Page, seed: number): Promise<void> 
 }
 
 export function ropOptionsPanel(page: Page): Locator {
-  return page.locator('aside[aria-label="ROP options"]');
+  return page.locator('aside[aria-label="Random Projections options"]');
 }
 
 // CT-315: the aside pins to the panel it was opened on, and its header names
@@ -35,7 +35,7 @@ export function ropPinnedPanelReadout(page: Page): Locator {
 // CT-333: the aside names the panel it projects from, and moves to the
 // selected panel only through its own button.
 export function ropSourcePanelReadout(page: Page): Locator {
-  return ropOptionsPanel(page).locator('output[aria-label="ROP source panel"]');
+  return ropOptionsPanel(page).locator('output[aria-label="Random Projections source panel"]');
 }
 
 export function ropUseSelectedPanelButton(page: Page): Locator {
@@ -66,15 +66,15 @@ export function ropNewProjectionButton(page: Page): Locator {
 }
 
 export function ropSeedReadout(page: Page): Locator {
-  return ropOptionsPanel(page).locator('output[aria-label="ROP seed"]');
+  return ropOptionsPanel(page).locator('output[aria-label="Random Projections seed"]');
 }
 
 export function ropScoreReadout(page: Page): Locator {
-  return ropOptionsPanel(page).locator('output[aria-label="ROP score"]');
+  return ropOptionsPanel(page).locator('output[aria-label="Random Projections score"]');
 }
 
 export function ropBestScoreReadout(page: Page): Locator {
-  return ropOptionsPanel(page).locator('output[aria-label="Best ROP score"]');
+  return ropOptionsPanel(page).locator('output[aria-label="Best Random Projections score"]');
 }
 
 export function ropKeepButton(page: Page): Locator {

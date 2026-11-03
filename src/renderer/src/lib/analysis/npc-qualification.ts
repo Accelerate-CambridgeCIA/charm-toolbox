@@ -11,11 +11,11 @@ import type { MaskPanelState } from "@/lib/masks/mask-panel";
 export const MIN_NPC_NON_EMPTY_CATEGORY_COUNT = 2;
 
 export const NPC_NEEDS_A_SELECTED_STACK =
-  "Select a panel with a loaded stack to compute an NPC score.";
+  "Select a panel with a loaded stack to compute a Potential Contrast score.";
 export const NPC_NEEDS_A_MASK_LAYER =
   "This stack has no mask layers. Add one with the Masks tool and paint at least two categories.";
 export const NPC_NEEDS_TWO_PAINTED_CATEGORIES =
-  "NPC needs a mask layer with at least two categories that have painted pixels.";
+  "Potential Contrast needs a mask layer with at least two categories that have painted pixels.";
 
 export function listNonEmptyCategoryValuesInMaskLayer(
   layer: MaskLayer,
